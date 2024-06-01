@@ -7,7 +7,7 @@ build-backend = "flit_core.buildapi"
 name = "flow4df"
 version = "0.0.1"
 authors = [
-  { name="Boyan Georgiev", email="todo" },
+  { name="Boyan Georgiev", email="todo@gmail.com" },
 ]
 description = "My dscription"
 readme = "README.md"
