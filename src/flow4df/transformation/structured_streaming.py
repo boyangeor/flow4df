@@ -8,7 +8,8 @@ from pyspark.sql.streaming.query import StreamingQuery
 from flow4df.storage.storage import Storage
 from flow4df.upstream_storages import UpstreamStorages
 from flow4df.transformation.transformation import Transformation
-from flow4df.common import OutputMode, Trigger, DataInterval
+from flow4df.common import OutputMode, Trigger
+from flow4df.data_interval import DataInterval
 from flow4df.testing import assertSchemaEqual
 
 Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
@@ -42,24 +43,22 @@ class StructuredStreamingTransformation(Transformation):
         df = df.withColumns(cols_to_add)
         return df
 
-    def build_writer(
+    def run_transformation(
         self,
         spark: SparkSession,
         this_storage: Storage,
         upstream_storages: UpstreamStorages,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
-    ) -> Writer:
+    ) -> StreamingQuery | None:
         _m = 'StructuredStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
-
         # Call the Transform to obtain the DataFrame
         df = self._build_data_frame(
             spark=spark,
             this_storage=this_storage,
             upstream_storages=upstream_storages
         )
-
         cp_location = this_storage.build_checkpoint_location(
             checkpoint_dir=self.checkpoint_dir
         )
@@ -79,9 +78,6 @@ class StructuredStreamingTransformation(Transformation):
             .queryName(f'streaming_query_{table_id}')
         )
         writer = this_storage.configure_writer(writer)
-        return writer
-
-    def start_writer(self, writer: Writer) -> StreamingQuery | None:
         assert isinstance(writer, DataStreamWriter)
         return writer.start()
 
@@ -94,6 +90,10 @@ class StructuredStreamingTransformation(Transformation):
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
     ) -> None:
+        """
+        Test if the `transform` is valid for Structured Streaming. Also assert
+        it produces a DataFrame with the expected schema.
+        """
         del trigger
         _m = 'StructuredStreaming should not receive `data_interval`!'
         assert data_interval is None, _m

@@ -14,6 +14,7 @@ from flow4df.table_identifier import TableIdentifier
 from flow4df.storage.storage import Storage
 from flow4df.storage_backend import StorageBackend
 from flow4df.partitioning import Partitioning
+from flow4df.data_interval import DataInterval
 
 TABLE_FORMAT = 'delta'
 Reader: TypeAlias = Union[DataFrameReader, DataStreamReader]
@@ -50,20 +51,34 @@ class DeltaStorage(Storage):
     ) -> DataFrame:
         return self._build_df(reader=spark.readStream, options=options)
 
-    def configure_writer(self, writer: Writer) -> Writer:
+    def configure_writer(
+            self, writer: Writer, data_interval: DataInterval | None = None
+    ) -> Writer:
         """Configures the given Writer and returns it.
 
         Sets:
             - .format('delta')
             - .option('path', '<location>')
             - .option('mergeSchema', True|False)
+            For idempotency of batch writes:
+            - .option('txnAppId', '<table_id>')
+            - .option('txnVersion', <data_interval.start_unix_ts_seconds>)
         """
-        return (
+        writer = (
             writer
             .format(TABLE_FORMAT)
             .option('path', self.location)
             .option('mergeSchema', self.merge_schema)
         )
+        table_id = self.table_identifier.table_id
+        if data_interval is not None:
+            writer = (
+                writer
+                .option('txnAppId', f'transform_{table_id}')
+                .option('txnVersion', data_interval.start_unix_ts_seconds)
+            )
+
+        return writer
 
     def build_checkpoint_location(self, checkpoint_dir: str) -> str:
         cp_location = self.storage_backend.build_checkpoint_location(

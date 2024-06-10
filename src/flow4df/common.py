@@ -1,12 +1,10 @@
 """
 Commonly used classes, protocols, enums.
 """
-
 from enum import Enum
 from dataclasses import dataclass
 from collections.abc import Callable
 from typing import TypedDict, Protocol
-from pendulum.datetime import DateTime
 from pyspark.sql import Column, DataFrame
 
 
@@ -21,12 +19,6 @@ class NamedColumn:
     """
     name: str
     column_thunk: Callable[[], Column]
-
-
-@dataclass(frozen=True, kw_only=True)
-class DataInterval:
-    start: DateTime
-    end: DateTime
 
 
 class Trigger(TypedDict, total=False):

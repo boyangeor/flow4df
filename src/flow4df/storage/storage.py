@@ -1,4 +1,3 @@
-import functools
 from typing import Protocol, TypeAlias, Union, Any
 from pyspark.sql import types as T
 from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
@@ -7,6 +6,7 @@ from pyspark.sql.streaming.readwriter import DataStreamWriter
 from flow4df.table_identifier import TableIdentifier
 from flow4df.storage_backend import StorageBackend
 from flow4df.partitioning import Partitioning
+from flow4df.data_interval import DataInterval
 
 Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
 
@@ -21,7 +21,9 @@ class Storage(Protocol):
     storage_backend: StorageBackend
     partitioning: Partitioning
 
-    def configure_writer(self, writer: Writer) -> Writer:
+    def configure_writer(
+        self, writer: Writer, data_interval: DataInterval | None = None,
+    ) -> Writer:
         """Configures the given Writer and returns it.
 
         Most likely sets (not an exhaustive list):

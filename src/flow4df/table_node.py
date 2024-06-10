@@ -12,7 +12,8 @@ from pyspark.sql.streaming.query import StreamingQuery
 from flow4df.storage import Storage
 from flow4df.upstream_storages import UpstreamStorages
 from flow4df.transformation import Transformation
-from flow4df.common import DataInterval, Trigger
+from flow4df.data_interval import DataInterval
+from flow4df.common import Trigger
 
 log = logging.getLogger(__name__)
 
@@ -37,14 +38,13 @@ class TableNode:
         upstream_storages = UpstreamStorages(
             storages=[tn.storage for tn in self.upstream_table_nodes]
         )
-        writer = self.transformation.build_writer(
+        return self.transformation.run_transformation(
             spark=spark,
             this_storage=self.storage,
             upstream_storages=upstream_storages,
             trigger=trigger,
             data_interval=data_interval,
         )
-        return self.transformation.start_writer(writer)
 
     def dry_run(
         self,
