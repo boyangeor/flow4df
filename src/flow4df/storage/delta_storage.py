@@ -51,6 +51,9 @@ class DeltaStorage(Storage):
     ) -> DataFrame:
         return self._build_df(reader=spark.readStream, options=options)
 
+    def build_delta_table(self, spark: SparkSession) -> DeltaTable:
+        return DeltaTable.forPath(sparkSession=spark, path=self.location)
+
     def configure_writer(
             self, writer: Writer, data_interval: DataInterval | None = None
     ) -> Writer:

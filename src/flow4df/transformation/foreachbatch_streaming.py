@@ -1,21 +1,18 @@
-from typing import Protocol, TypeAlias, Union
+from typing import Protocol
 from dataclasses import dataclass
 from pyspark.sql import types as T
-from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
-from pyspark.sql.streaming.readwriter import DataStreamWriter
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
+from pyspark.sql.streaming.readwriter import DataStreamWriter
 
+from flow4df.common import Trigger
+from flow4df.data_interval import DataInterval
 from flow4df.storage.storage import Storage
 from flow4df.upstream_storages import UpstreamStorages
 from flow4df.transformation.transformation import Transformation
-from flow4df.common import OutputMode, Trigger
-from flow4df.data_interval import DataInterval
-from flow4df.testing import assertSchemaEqual
-
-Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
 
 
-class StreamingTransform(Protocol):
+class BuildStreamingDataFrame(Protocol):
     def __call__(
         self,
         spark: SparkSession,
@@ -24,24 +21,22 @@ class StreamingTransform(Protocol):
         ...
 
 
+class ForeachBatchExecute(Protocol):
+    def __call__(
+        self,
+        this_storage: Storage,
+        batch_df: DataFrame,
+        epoch_id: int
+    ) -> None:
+        ...
+
+
 @dataclass(frozen=True, kw_only=True)
-class StructuredStreamingTransformation(Transformation):
-    transform: StreamingTransform
-    output_mode: OutputMode
+class ForeachBatchStreamingTransformation(Transformation):
+    build_streaming_df: BuildStreamingDataFrame
+    foreach_batch_execute: ForeachBatchExecute
     default_trigger: Trigger
     checkpoint_dir: str = '_checkpoint'
-
-    def _build_data_frame(
-        self,
-        spark: SparkSession,
-        this_storage: Storage,
-        upstream_storages: UpstreamStorages
-    ) -> DataFrame:
-        df = self.transform(spark=spark, upstream_storages=upstream_storages)
-        # Add/replace partitioning columns
-        cols_to_add = this_storage.partitioning.build_columns_to_add()
-        df = df.withColumns(cols_to_add)
-        return df
 
     def run_transformation(
         self,
@@ -51,12 +46,12 @@ class StructuredStreamingTransformation(Transformation):
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
     ) -> StreamingQuery | None:
-        _m = 'StructuredStreaming should not receive `data_interval`!'
+        _m = 'ForeachBatchStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
-        # Call the Transform to obtain the DataFrame
-        df = self._build_data_frame(
+
+        # Build the streaming DataFrame from the upstream storages
+        df = self.build_streaming_df(
             spark=spark,
-            this_storage=this_storage,
             upstream_storages=upstream_storages
         )
         cp_location = this_storage.build_checkpoint_location(
@@ -66,18 +61,25 @@ class StructuredStreamingTransformation(Transformation):
         if trigger is not None:
             _trigger = trigger
 
-        # Build and configure the Writer
+        # foreach_batch_function = functools.partial(
+        #     self.foreach_batch_execute, this_storage=this_storage
+        # )
+        def foreach_batch_function(df: DataFrame, epoch_id: int):
+            self.foreach_batch_execute(
+                this_storage=this_storage,
+                batch_df=df,
+                epoch_id=epoch_id
+            )
+
         table_id = this_storage.table_identifier.table_id
         writer = (
             df
             .writeStream
-            .outputMode(self.output_mode.name)
             .option('checkpointLocation', cp_location)
-            .partitionBy(*this_storage.partitioning.columns)
+            .queryName(f'foreachbatch_streaming_query_{table_id}')
             .trigger(**_trigger)  # type: ignore
-            .queryName(f'streaming_query_{table_id}')
+            .foreachBatch(foreach_batch_function)
         )
-        writer = this_storage.configure_writer(writer)
         assert isinstance(writer, DataStreamWriter)
         return writer.start()
 
@@ -90,17 +92,12 @@ class StructuredStreamingTransformation(Transformation):
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
     ) -> None:
-        """
-        Test if the `transform` is valid for Structured Streaming. Also assert
-        it produces a DataFrame with the expected schema.
-        """
-        del trigger
-        _m = 'StructuredStreaming should not receive `data_interval`!'
-        assert data_interval is None, _m
-
-        tdf = self._build_data_frame(
+        del schema, trigger, data_interval
+        query = self.run_transformation(
             spark=spark,
             this_storage=this_storage,
             upstream_storages=upstream_storage_stubs,
+            trigger={'availableNow': True},
         )
-        assertSchemaEqual(actual=tdf.schema, expected=schema)
+        assert query is not None
+        query.awaitTermination()

@@ -11,6 +11,7 @@ from flow4df.transformation.transformation import Transformation
 from flow4df.data_interval import DataInterval
 from flow4df.testing import assertSchemaEqual
 
+
 class BatchTransform(Protocol):
     def __call__(
         self,
@@ -70,7 +71,7 @@ class BatchTransformation(Transformation):
             .partitionBy(*this_storage.partitioning.columns)
         )
         writer = this_storage.configure_writer(
-            writer= writer, data_interval=data_interval
+            writer=writer, data_interval=data_interval
         )
         assert isinstance(writer, DataFrameWriter)
         return writer.save()
@@ -80,7 +81,7 @@ class BatchTransformation(Transformation):
         spark: SparkSession,
         schema: T.StructType,
         this_storage: Storage,
-        uptream_storage_stubs: UpstreamStorages,
+        upstream_storage_stubs: UpstreamStorages,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
     ) -> None:
@@ -96,7 +97,7 @@ class BatchTransformation(Transformation):
         tdf = self._build_data_frame(
             spark=spark,
             this_storage=this_storage,
-            upstream_storages=uptream_storage_stubs,
+            upstream_storages=upstream_storage_stubs,
             data_interval=data_interval,
         )
         assertSchemaEqual(actual=tdf.schema, expected=schema)

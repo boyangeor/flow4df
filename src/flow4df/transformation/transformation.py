@@ -28,7 +28,7 @@ class Transformation(Protocol):
         spark: SparkSession,
         schema: T.StructType,
         this_storage: Storage,
-        uptream_storage_stubs: UpstreamStorages,
+        upstream_storage_stubs: UpstreamStorages,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None,
     ) -> None:

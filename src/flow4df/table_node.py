@@ -27,6 +27,8 @@ class TableNode:
     storage_stub: Storage
 
     def __post_init__(self) -> None:
+        _m = '`storage` and `storage_stub` must have the same partitioning!'
+        assert self.storage.partitioning == self.storage_stub.partitioning, _m
         pass
 
     def run(
@@ -60,8 +62,8 @@ class TableNode:
         self.transformation.test_transformation(
             spark=spark,
             schema=self.schema,
-            this_storage=self.storage,
-            uptream_storage_stubs=upstream_storage_stubs,
+            this_storage=self.storage_stub,
+            upstream_storage_stubs=upstream_storage_stubs,
             trigger=trigger,
             data_interval=data_interval,
         )
