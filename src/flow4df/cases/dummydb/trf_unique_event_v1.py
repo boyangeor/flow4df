@@ -26,14 +26,13 @@ def build_streaming_df(
 
 
 def foreach_batch_execute(
+    spark: SparkSession,
     this_storage: flow4df.Storage,
     batch_df: DataFrame,
     epoch_id: int
 ) -> None:
     del epoch_id
     assert isinstance(this_storage, flow4df.DeltaStorage)
-    spark = SparkSession.getActiveSession()
-    assert spark is not None
     unique_event_dt = this_storage.build_delta_table(spark=spark)
 
     merge_builder = unique_event_dt.alias('event').merge(

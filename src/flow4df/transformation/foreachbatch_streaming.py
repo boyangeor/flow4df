@@ -24,6 +24,7 @@ class BuildStreamingDataFrame(Protocol):
 class ForeachBatchExecute(Protocol):
     def __call__(
         self,
+        spark: SparkSession,
         this_storage: Storage,
         batch_df: DataFrame,
         epoch_id: int
@@ -66,6 +67,7 @@ class ForeachBatchStreamingTransformation(Transformation):
         # )
         def foreach_batch_function(df: DataFrame, epoch_id: int):
             self.foreach_batch_execute(
+                spark=spark,
                 this_storage=this_storage,
                 batch_df=df,
                 epoch_id=epoch_id
