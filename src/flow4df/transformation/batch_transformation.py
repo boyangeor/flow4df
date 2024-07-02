@@ -26,6 +26,7 @@ class BatchTransform(Protocol):
 class BatchTransformation(Transformation):
     transform: BatchTransform
     output_mode: OutputMode
+    is_pure: bool
 
     def _build_data_frame(
         self,

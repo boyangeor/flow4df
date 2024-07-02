@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "flow4df"
-version = "0.0.1"
+version = "0.1.0"
 authors = [
   { name="Boyan Georgiev", email="todo@gmail.com" },
 ]
@@ -18,11 +18,10 @@ classifiers = [
 ]
 
 dependencies = [
-    "flit>=3.8",
-    "black",
-    "pendulum>=2.1.2",
-    "pyspark==3.5.0",
-    "delta-spark==3.1.0",
+    "black~=23.3",
+    "pendulum~=2.1",
+    "pyspark~=3.5",
+    "delta-spark~=3.2",
 ]
 
 [project.optional-dependencies]

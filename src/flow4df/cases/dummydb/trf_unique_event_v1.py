@@ -35,12 +35,21 @@ def foreach_batch_execute(
     assert isinstance(this_storage, flow4df.DeltaStorage)
     unique_event_dt = this_storage.build_delta_table(spark=spark)
 
+    batch_df.cache()
+    min_date = batch_df.select(F.min('date')).collect()[0][0]
+
+    condition = ' AND '.join([
+        'event.value = source.value',
+        # To restrict the search space for the MERGE
+        f'event.date >= "{min_date.isoformat()}"'
+    ])
     merge_builder = unique_event_dt.alias('event').merge(
         source=batch_df.alias('source'),
-        condition='event.value = source.value',
+        condition=condition,
     )
     merge_builder = merge_builder.whenNotMatchedInsertAll()
     merge_builder.execute()
+    batch_df.unpersist()
 
 
 transformation = flow4df.ForeachBatchStreamingTransformation(

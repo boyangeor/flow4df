@@ -13,6 +13,7 @@ Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
 
 
 class Transformation(Protocol):
+
     def run_transformation(
         self,
         spark: SparkSession,

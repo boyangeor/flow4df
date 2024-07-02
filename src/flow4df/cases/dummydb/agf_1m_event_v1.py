@@ -51,6 +51,7 @@ def count_minutely(
 transformation = flow4df.BatchTransformation(
     transform=count_minutely,
     output_mode=flow4df.OutputMode.append,
+    is_pure=True
 )
 
 
