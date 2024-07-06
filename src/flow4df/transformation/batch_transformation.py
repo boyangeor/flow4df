@@ -81,7 +81,7 @@ class BatchTransformation(Transformation):
         self,
         spark: SparkSession,
         schema: T.StructType,
-        this_storage: Storage,
+        this_storage_stub: Storage,
         upstream_storage_stubs: UpstreamStorages,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
@@ -97,7 +97,7 @@ class BatchTransformation(Transformation):
 
         tdf = self._build_data_frame(
             spark=spark,
-            this_storage=this_storage,
+            this_storage=this_storage_stub,
             upstream_storages=upstream_storage_stubs,
             data_interval=data_interval,
         )

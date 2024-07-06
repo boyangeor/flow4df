@@ -62,7 +62,7 @@ class TableNode:
         self.transformation.test_transformation(
             spark=spark,
             schema=self.schema,
-            this_storage=self.storage_stub,
+            this_storage_stub=self.storage_stub,
             upstream_storage_stubs=upstream_storage_stubs,
             trigger=trigger,
             data_interval=data_interval,

@@ -89,7 +89,7 @@ class ForeachBatchStreamingTransformation(Transformation):
         self,
         spark: SparkSession,
         schema: T.StructType,
-        this_storage: Storage,
+        this_storage_stub: Storage,
         upstream_storage_stubs: UpstreamStorages,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
@@ -97,7 +97,7 @@ class ForeachBatchStreamingTransformation(Transformation):
         del schema, trigger, data_interval
         query = self.run_transformation(
             spark=spark,
-            this_storage=this_storage,
+            this_storage=this_storage_stub,
             upstream_storages=upstream_storage_stubs,
             trigger={'availableNow': True},
         )

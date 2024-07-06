@@ -85,7 +85,7 @@ class StructuredStreamingTransformation(Transformation):
         self,
         spark: SparkSession,
         schema: T.StructType,
-        this_storage: Storage,
+        this_storage_stub: Storage,
         upstream_storage_stubs: UpstreamStorages,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
@@ -100,7 +100,7 @@ class StructuredStreamingTransformation(Transformation):
 
         tdf = self._build_data_frame(
             spark=spark,
-            this_storage=this_storage,
+            this_storage=this_storage_stub,
             upstream_storages=upstream_storage_stubs,
         )
         assertSchemaEqual(actual=tdf.schema, expected=schema)
