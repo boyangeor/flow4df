@@ -11,3 +11,7 @@ class TableIdentifier:
     @functools.cached_property
     def table_id(self) -> str:
         return f'{self.database}.{self.name}_v{self.version}'
+
+    @functools.cached_property
+    def table_path_component(self) -> str:
+        return f'{self.name}_v{self.version}'
