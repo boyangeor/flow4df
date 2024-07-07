@@ -20,3 +20,4 @@ from flow4df.transformation.batch_transformation import BatchTransformation
 from flow4df.transformation.generic_transformation import GenericTransformation
 
 from flow4df.table_node import TableNode
+
