@@ -8,6 +8,7 @@ from flow4df.partitioning import Partitioning
 from flow4df.storage.storage import Storage
 from flow4df.storage.delta_storage import DeltaStorage
 from flow4df.storage_backend import LocalStorageBackend
+from flow4df.storage_backend import S3StorageBackend
 
 from flow4df.transformation.structured_streaming import (
     StructuredStreamingTransformation
