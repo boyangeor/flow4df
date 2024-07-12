@@ -2,6 +2,7 @@ import re
 import logging
 import operator
 import functools
+import typing
 from typing import TypeAlias, Union, Any
 from dataclasses import dataclass, field
 from pyspark.sql import SparkSession, DataFrame, Column, Window
@@ -248,13 +249,28 @@ class DeltaStorage(Storage):
         )
 
     @staticmethod
+    @typing.no_type_check
     def _build_log_snapshot_df(
         spark: SparkSession, location: str
     ) -> DataFrame:
-        j_log = spark._jvm.org.apache.spark.sql.delta.DeltaLog  # type: ignore
-        delta_log = j_log.forTable(  # type: ignore
-            spark._jsparkSession, location
-        )
+        j_logs = [
+            # OSS Delta
+            spark._jvm.org.apache.spark.sql.delta.DeltaLog,  # type: ignore
+            # Databricks Delta
+            spark._jvm.com.databricks.sql.transaction.tahoe.DeltaLog  # type: ignore
+        ]
+        for j_log in j_logs:
+            try:
+                delta_log = j_log.forTable( # type: ignore
+                    spark._jsparkSession, location
+                )
+                if delta_log is not None:
+                    break
+            except Exception:
+                delta_log = None
+
+        _m = 'Cannot build DeltaLog snapshot!'
+        assert delta_log is not None, _m  # type: ignore
         jvm_table_files = (
             delta_log.snapshot().allFiles().toDF()  # type: ignore
         )
