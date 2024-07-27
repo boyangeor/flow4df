@@ -249,7 +249,6 @@ class DeltaStorage(Storage):
         )
 
     @staticmethod
-    @typing.no_type_check
     def _build_log_snapshot_df(
         spark: SparkSession, location: str
     ) -> DataFrame:
