@@ -35,6 +35,7 @@ class DeltaStorage(Storage):
     storage_backend: StorageBackend
     partitioning: Partitioning
     stateful_query_source: bool
+    overwrite_partition: bool = False
     merge_schema: bool = True
     z_order_by: str | None = None
     constraints: list[Constraint] = field(default_factory=list)
@@ -56,7 +57,7 @@ class DeltaStorage(Storage):
         return DeltaTable.forPath(sparkSession=spark, path=self.location)
 
     def configure_writer(
-            self, writer: Writer, data_interval: DataInterval | None = None
+        self, writer: Writer, data_interval: DataInterval | None = None
     ) -> Writer:
         """Configures the given Writer and returns it.
 
@@ -95,7 +96,6 @@ class DeltaStorage(Storage):
     def run_storage_maintenance(
         self, spark: SparkSession, column_types: dict[str, T.DataType]
     ) -> None:
-        optimizer = self._build_delta_table(spark=spark)
         dt = self._build_delta_table(spark=spark)
         if not self.stateful_query_source:
             if self.z_order_by is None:
@@ -105,6 +105,7 @@ class DeltaStorage(Storage):
 
             return None
 
+        node_data_frame = dt.toDF()
         while True:
             part_to_compact = self.find_partition_to_compact(
                 spark=spark, column_types=column_types
@@ -113,9 +114,11 @@ class DeltaStorage(Storage):
                 break
             tname = self.table_identifier.name
             log.warning(f'Compacting: {tname}\n{part_to_compact}')
-            optimizer = dt.optimize().where(part_to_compact)
-            assert self.z_order_by is not None
-            optimizer.executeZOrderBy(self.z_order_by)
+            self.compact_partition(
+                partition_predicate=part_to_compact,
+                node_delta_table=dt,
+                node_data_frame=node_data_frame,
+            )
 
         return None
 
@@ -196,6 +199,30 @@ class DeltaStorage(Storage):
             unordered_partition = part_to_compact[0][_pe]
 
         return unordered_partition
+
+    def compact_partition(
+        self,
+        partition_predicate: str,
+        node_delta_table: DeltaTable,
+        node_data_frame: DataFrame,
+    ) -> None:
+        if self.overwrite_partition:
+            part_df = node_data_frame.where(partition_predicate).repartition(1)
+            writer = (
+                part_df.write
+                .format(TABLE_FORMAT)
+                .mode('overwrite')
+                .option('path', self.location)
+                .option('dataChange', False)
+                .option('replaceWhere', partition_predicate)
+            )
+            writer.save()
+        else:
+            optimizer = node_delta_table.optimize().where(partition_predicate)
+            assert self.z_order_by is not None
+            optimizer.executeZOrderBy(self.z_order_by)
+
+        return None
 
     def _build_df(
         self, reader: Reader, options: dict[str, Any] | None = None
