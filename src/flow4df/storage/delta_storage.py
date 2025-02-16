@@ -23,7 +23,6 @@ Reader: TypeAlias = Union[DataFrameReader, DataStreamReader]
 Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
 
 
-
 @dataclass(frozen=True, kw_only=True)
 class Constraint:
     name: str
@@ -36,9 +35,7 @@ class DeltaStorage(Storage):
     storage_backend: StorageBackend
     partitioning: Partitioning
     stateful_query_source: bool
-    overwrite_partition: bool = False
     merge_schema: bool = True
-    z_order_by: str | None = None
     constraints: list[Constraint] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -99,11 +96,7 @@ class DeltaStorage(Storage):
     ) -> None:
         dt = self._build_delta_table(spark=spark)
         if not self.stateful_query_source:
-            if self.z_order_by is None:
-                dt.optimize().executeCompaction()
-            else:
-                dt.optimize().executeZOrderBy(self.z_order_by)
-
+            dt.optimize().executeCompaction()
             return None
 
         node_data_frame = dt.toDF()
@@ -113,11 +106,11 @@ class DeltaStorage(Storage):
             )
             if part_to_compact is None:
                 break
+
             tname = self.table_identifier.name
             log.warning(f'Compacting: {tname}\n{part_to_compact}')
             self.compact_partition(
                 partition_predicate=part_to_compact,
-                node_delta_table=dt,
                 node_data_frame=node_data_frame,
             )
 
@@ -202,27 +195,18 @@ class DeltaStorage(Storage):
         return unordered_partition
 
     def compact_partition(
-        self,
-        partition_predicate: str,
-        node_delta_table: DeltaTable,
-        node_data_frame: DataFrame,
+        self, partition_predicate: str, node_data_frame: DataFrame,
     ) -> None:
-        if self.overwrite_partition:
-            part_df = node_data_frame.where(partition_predicate).repartition(1)
-            writer = (
-                part_df.write
-                .format(TABLE_FORMAT)
-                .mode('overwrite')
-                .option('path', self.location)
-                .option('dataChange', False)
-                .option('replaceWhere', partition_predicate)
-            )
-            writer.save()
-        else:
-            optimizer = node_delta_table.optimize().where(partition_predicate)
-            assert self.z_order_by is not None
-            optimizer.executeZOrderBy(self.z_order_by)
-
+        part_df = node_data_frame.where(partition_predicate).repartition(1)
+        writer = (
+            part_df.write
+            .format(TABLE_FORMAT)
+            .mode('overwrite')
+            .option('path', self.location)
+            .option('dataChange', False)
+            .option('replaceWhere', partition_predicate)
+        )
+        writer.save()
         return None
 
     def _build_df(
@@ -245,9 +229,6 @@ class DeltaStorage(Storage):
             _m = 'Partitioning must have time_monotonic_increasing columns'
             _tmi = self.partitioning.time_monotonic_increasing
             assert len(_tmi) > 0, _m
-
-            _m1 = 'Must define `z_order_by` for compaction'
-            assert self.z_order_by is not None, _m1
 
     def _build_delta_table(self, spark: SparkSession) -> DeltaTable:
         return DeltaTable.forPath(sparkSession=spark, path=self.location)
