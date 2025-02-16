@@ -37,8 +37,8 @@ emacs = [
 ]
 
 [project.urls]
-Documentation = "TODO"
-Source = "TODO"
+Documentation = "https://TODO"
+Source = "https://TODO"
 
 [tool.pytest.ini_options]
 markers = [

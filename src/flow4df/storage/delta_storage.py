@@ -18,9 +18,10 @@ from flow4df.partitioning import Partitioning
 from flow4df.data_interval import DataInterval
 
 TABLE_FORMAT = 'delta'
+log = logging.getLogger()
 Reader: TypeAlias = Union[DataFrameReader, DataStreamReader]
 Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
-log = logging.getLogger()
+
 
 
 @dataclass(frozen=True, kw_only=True)
