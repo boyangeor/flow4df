@@ -28,7 +28,6 @@ def test_init_1() -> None:
         storage_backend=backend,
         partitioning=partitioning,
         stateful_query_source=True,
-        z_order_by='value'
     )
     expected = 'file:///tmp/dummydb/fct_event_v1.delta/_checkpoint'
     returned = delta_storage.build_checkpoint_location(
@@ -44,36 +43,15 @@ def test_init_2() -> None:
         version=1
     )
     backend = LocalStorageBackend(prefix='/tmp')
-    time_monotonic = [
-        NamedColumn('my_date', lambda: F.to_date('timestamp')),
-    ]
-    partitioning = Partitioning(
-        time_non_monotonic=[],
-        time_monotonic_increasing=time_monotonic
-    )
-    with pytest.raises(AssertionError):
-        DeltaStorage(
-            table_identifier=t1,
-            storage_backend=backend,
-            partitioning=partitioning,
-            stateful_query_source=True,
-        )
-
-
-def test_init_3() -> None:
-    table_identifier = TableIdentifier(
-        database='dummydb',
-        name='trf_event',
-        version=1
-    )
-    backend = LocalStorageBackend(prefix='/tmp')
+    # Stateful query sources require at least 1 column in
+    # `time_monotonic_increasing`
     partitioning = Partitioning(
         time_non_monotonic=[],
         time_monotonic_increasing=[]
     )
     with pytest.raises(AssertionError):
         DeltaStorage(
-            table_identifier=table_identifier,
+            table_identifier=t1,
             storage_backend=backend,
             partitioning=partitioning,
             stateful_query_source=True,

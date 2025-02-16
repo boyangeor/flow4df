@@ -80,7 +80,6 @@ build_storage = functools.partial(
     table_identifier=table_identifier,
     partitioning=partitioning,
     stateful_query_source=True,
-    z_order_by='value'
 )
 storage = build_storage(
     storage_backend=flow4df.LocalStorageBackend(prefix='/tmp')
