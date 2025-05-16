@@ -25,6 +25,7 @@ class TableNode:
     transformation: Transformation
     storage: Storage
     storage_stub: Storage
+    documentation: str | None = None
 
     def __post_init__(self) -> None:
         _m = '`storage` and `storage_stub` must have the same partitioning!'
