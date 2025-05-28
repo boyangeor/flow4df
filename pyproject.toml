@@ -34,6 +34,9 @@ delta = [
 emacs = [
     "ipython",
     "pyright",
+    "setuptools",
+    "pip",
+    "flake8",
 ]
 
 [project.urls]
