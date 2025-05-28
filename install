@@ -1,0 +1,4 @@
+uv sync --python 3.11 --all-extras --upgrade
+
+# Activate the environment:
+# source .venv/bin/activate

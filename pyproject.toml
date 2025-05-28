@@ -5,44 +5,37 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "flow4df"
-version = "0.1.0"
+version = "1.0.0"
 authors = [
   { name="Boyan Georgiev", email="todo@gmail.com" },
 ]
 description = "My dscription"
 readme = "README.md"
-requires-python = ">=3.10,<4"
+requires-python = ">=3.11,<4"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
 ]
 
 dependencies = [
-    "black~=23.3",
-    "pendulum~=2.1",
     "pyspark~=3.5",
-    "delta-spark~=3.2",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.4.3",
+delta = [
+    "delta-spark==3.*"
 ]
-doc = [
-    "sphinx>=7.3.0",
-]
+# dev = [
+#     "pytest>=7.4.3",
+# ]
+# doc = [
+#     "sphinx>=7.3.0",
+# ]
 emacs = [
     "ipython",
-    "pyright==1.1.345",
+    "pyright",
 ]
 
 [project.urls]
 Documentation = "https://TODO"
 Source = "https://TODO"
-
-[tool.pytest.ini_options]
-markers = [
-    "slow: Slow tests",
-]
-log_cli = true
-log_cli_level = "WARN"
