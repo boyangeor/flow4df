@@ -25,15 +25,15 @@ dependencies = [
 delta = [
     "delta-spark==3.*"
 ]
-# dev = [
-#     "pytest>=7.4.3",
-# ]
+dev = [
+    "pytest>=7.4.3",
+]
 # doc = [
 #     "sphinx>=7.3.0",
 # ]
 emacs = [
     "ipython",
-    "pyright",
+    "pyright[nodejs]",
     "setuptools",
     "pip",
     "flake8",
