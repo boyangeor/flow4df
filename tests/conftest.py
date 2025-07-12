@@ -68,14 +68,18 @@ def example_table_1():
         catalog='catalog1',
         schema='schema1',
         name='example_table_1',
-        version=1
+        version='1'
+    )
+    table_format = DeltaTableFormat(
+        stateful_query_source=True,
+        merge_schema=True,
     )
     return Table(
         schema=table_schema,
         table_identifier=identifier,
         upstream_tables=[],
         transformation=transformation,
-        table_format=DeltaTableFormat(merge_schema=True),
+        table_format=table_format,
         storage=LocalStorage(prefix='/tmp'),
         storage_stub=LocalStorage(prefix='/tmp2'),
         partition_spec=part_spec,

@@ -1,1 +1,1 @@
-uv run pytest -s
+uv run pytest -m "not slow" -s --durations=5

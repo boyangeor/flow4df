@@ -10,7 +10,6 @@ from flow4df import LocalStorage
 from flow4df import PartitionSpec
 from flow4df.enums import OutputMode
 
-
 table_schema = T.StructType([
     T.StructField('timestamp', T.TimestampType(), True),
     T.StructField('value', T.LongType(), True)
@@ -36,12 +35,10 @@ transformation = StructuredStreamingTransformation(
     default_trigger={'availableNow': True},
     checkpoint_dir='_checkpoint',
 )
-
 part_spec = PartitionSpec(
     time_non_monotonic=[],
     time_monotonic_increasing=['event_date'],
 )
-
 table = Table(
     schema=table_schema,
     table_identifier=TableIdentifier.from_module_name(__name__),

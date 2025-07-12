@@ -42,3 +42,9 @@ emacs = [
 [project.urls]
 Documentation = "https://TODO"
 Source = "https://TODO"
+
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow `pytest -m \"not slow\"`",
+]

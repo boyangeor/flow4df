@@ -1,3 +1,4 @@
+from flow4df import enums
 from flow4df.partition_spec import PartitionSpec
 from flow4df.table_identifier import TableIdentifier
 from flow4df.data_interval import DataInterval
