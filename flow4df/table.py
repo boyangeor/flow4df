@@ -3,23 +3,24 @@ import logging
 import functools
 import datetime as dt
 from typing import Any, Protocol
-from dataclasses import dataclass, field, asdict, fields
 from pyspark.sql import types as T
+from dataclasses import dataclass, field, fields
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
 
 from flow4df import types
 from flow4df import DataInterval, Trigger, TableIdentifier, PartitionSpec
 from flow4df import TableFormat, Storage
+from flow4df.table_stats import TableStats
 
 log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=False, kw_only=True)
 class Table:
-    schema: T.StructType
+    schema: T.StructType = field(repr=False)
     table_identifier: TableIdentifier
-    upstream_tables: list[Table] = field(default_factory=list)
+    upstream_tables: list[Table] = field(default_factory=list, repr=False)
     transformation: Transformation
     table_format: TableFormat
     storage: Storage
@@ -42,6 +43,16 @@ class Table:
         self.table_format.init_table(
             spark=spark,
             location=self.location,
+            schema=self.schema,
+            partition_spec=self.partition_spec
+        )
+
+    def init_table_stub(self, spark: SparkSession) -> None:
+        """Initizalize the Table stub, used for unit testing."""
+        stub_location = self.storage_stub.build_location(self.table_identifier)
+        self.table_format.init_table(
+            spark=spark,
+            location=stub_location,
             schema=self.schema,
             partition_spec=self.partition_spec
         )
@@ -73,17 +84,24 @@ class Table:
             reader=spark.readStream, location=self.location, options=options
         )
 
+    def get_upstream_table(self, name: str) -> Table:
+        requested_table = [
+            table for table in self.upstream_tables
+            if table.table_identifier.name == name
+        ]
+        _m = 'More than 1 upstream Table found!'
+        assert len(requested_table) == 1, _m
+        return requested_table[0]
+
     def run(
         self,
         spark: SparkSession,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None,
     ) -> StreamingQuery | None:
-        upstream_tables = UpstreamTables(self.upstream_tables)
         return self.transformation.run_transformation(
             spark=spark,
             this_table=self,
-            upstream_tables=upstream_tables,
             trigger=trigger,
             data_interval=data_interval
         )
@@ -100,33 +118,42 @@ class Table:
         )
         return None
 
+    def calculate_table_stats(self, spark: SparkSession) -> TableStats:
+        return self.table_format.calculate_table_stats(spark, self.location)
+
+    def _build_stub_table(self) -> Table:
+        table_fields = fields(Table)
+        non_storage_fields = [
+            field.name for field in table_fields
+            if field.name not in {'storage'}
+        ]
+        init_args = {
+            field: getattr(self, field) for field in non_storage_fields
+        }
+        # Replace the `storage` with `storage_stub`
+        init_args['storage'] = self.storage_stub
+        return Table(**init_args)
+
 
 @dataclass(frozen=False, kw_only=True)
 class UnitTestTable(Table):
+    """TODO."""
 
     @staticmethod
     def from_table(table: Table) -> UnitTestTable:
         table_fields = fields(Table)
         non_storage_fields = [
             field.name for field in table_fields
-            if field.name not in {'storage', 'storage_stub'}
+            if field.name not in {'storage', 'upstream_tables'}
         ]
         init_args = {
             field: getattr(table, field) for field in non_storage_fields
         }
-        # Replace the `storage` with `storage_stub`
         init_args['storage'] = table.storage_stub
-        init_args['storage_stub'] = table.storage_stub
+        init_args['upstream_tables'] = [
+            ut._build_stub_table() for ut in table.upstream_tables
+        ]
         return UnitTestTable(**init_args)
-
-
-@dataclass(frozen=True, kw_only=False)
-class UpstreamTables:
-    tables: list[Table]
-
-    def find_storage(self, catalog: str, schema: str, name: str) -> Table:
-        """TODO: implement it."""
-        return self.tables[0]
 
 
 class Transformation(Protocol):
@@ -135,7 +162,6 @@ class Transformation(Protocol):
         self,
         spark: SparkSession,
         this_table: Table,
-        upstream_tables: UpstreamTables,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None,
     ) -> StreamingQuery | None:
@@ -144,9 +170,7 @@ class Transformation(Protocol):
     def test_transformation(
         self,
         spark: SparkSession,
-        schema: T.StructType,
         this_table: Table,
-        upstream_tables: UpstreamTables,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None,
     ) -> None:

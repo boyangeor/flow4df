@@ -10,7 +10,7 @@ from flow4df.storage.local_storage import LocalStorage
 from flow4df.table_format.table_format import TableFormat
 from flow4df.table_format.delta_table_format import DeltaTableFormat
 
-from flow4df.table import Table, UpstreamTables, Transformation
+from flow4df.table import Table, Transformation
 
 
 from flow4df.transformation.structured_streaming import (

@@ -5,6 +5,7 @@ from pyspark.sql.types import StructType, DataType
 
 from flow4df import types
 from flow4df import DataInterval, PartitionSpec
+from flow4df.table_stats import TableStats
 
 
 class TableFormat(Protocol):
@@ -26,7 +27,9 @@ class TableFormat(Protocol):
         ...
 
     def configure_writer(
-        self, writer: types.Writer, data_interval: DataInterval, location: str
+        self, writer: types.Writer,
+        location: str,
+        data_interval: DataInterval | None,
     ) -> types.Writer:
         """Configures the given Writer and returns it.
 
@@ -60,4 +63,10 @@ class TableFormat(Protocol):
             - optimizing file layout e.g. zOrderBy
             - cleaning lock files e.g. in _delta_log/.tmp/
         """
+        ...
+
+    def calculate_table_stats(
+        self, spark: SparkSession, location: str
+    ) -> TableStats:
+        """Calculate basic stats for the table."""
         ...

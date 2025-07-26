@@ -12,9 +12,9 @@ def build_table() -> flow4df.Table:
     ])
 
     def transform(
-        spark: SparkSession, upstream_tables: flow4df.UpstreamTables
+        spark: SparkSession, this_table: flow4df.Table
     ) -> DataFrame:
-        del upstream_tables
+        del this_table
         df = (
             spark.readStream.format('rate-micro-batch')
             .option('rowsPerBatch', 5)

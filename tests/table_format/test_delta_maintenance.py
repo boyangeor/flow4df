@@ -1,3 +1,4 @@
+import pytest
 import flow4df
 from pyspark.sql import types as T
 from pyspark.sql import functions as F
@@ -12,9 +13,9 @@ def build_table() -> flow4df.Table:
     ])
 
     def transform(
-        spark: SparkSession, upstream_tables: flow4df.UpstreamTables
+        spark: SparkSession, this_table: flow4df.Table
     ) -> DataFrame:
-        del upstream_tables
+        del this_table
         df = (
             spark.readStream
             .format('rate-micro-batch')
@@ -57,18 +58,25 @@ def build_table() -> flow4df.Table:
     )
 
 
+@pytest.mark.slow
 def test_delta_maintenance(spark: SparkSession) -> None:
     table = build_table()
     table.init_table(spark=spark)
-
     # Trigger it few times
-    handle1 = table.run(spark, trigger={'availableNow': True})
-    assert handle1 is not None
-    handle1.awaitTermination()
+    for i in range(2):
+        handle = table.run(spark, trigger={'availableNow': True})
+        assert handle is not None
+        handle.awaitTermination()
 
-    handle2 = table.run(spark, trigger={'availableNow': True})
-    assert handle2 is not None
-    handle2.awaitTermination()
-
+    stats_before = table.calculate_table_stats(spark)
+    # Run the maintenance
     table.run_table_maintenance(spark, run_for=None)
+
+    stats_after = table.calculate_table_stats(spark)
+    # The row count should be the same
+    _m = 'Maintenance changed the row count!'
+    assert stats_before.row_count == stats_after.row_count, _m
+    # The file count should be smaller
+    _m = 'Maintenance did not reduce the file count'
+    assert stats_before.file_count > stats_after.file_count, _m
     return None

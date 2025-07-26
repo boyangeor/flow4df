@@ -6,12 +6,13 @@ from pyspark.sql import types as T
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
 
-from flow4df import Table, UpstreamTables
+from flow4df import Table
 from flow4df import TableIdentifier
 from flow4df import StructuredStreamingTransformation
 from flow4df import DeltaTableFormat
 from flow4df import LocalStorage
 from flow4df import PartitionSpec
+import flow4df
 from flow4df.enums import OutputMode
 
 
@@ -43,9 +44,9 @@ def example_table_1():
     ])
 
     def transform(
-        spark: SparkSession, upstream_tables: UpstreamTables
+        spark: SparkSession, this_table: flow4df.Table
     ) -> DataFrame:
-        del upstream_tables
+        del this_table
         df = (
             spark.readStream.format('rate-micro-batch')
             .option('rowsPerBatch', 5)

@@ -1,11 +1,10 @@
 from typing import Protocol, TypeAlias, Union
 from dataclasses import dataclass
-from pyspark.sql import types as T
 from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
 from pyspark.sql.streaming.readwriter import DataStreamWriter
 from pyspark.sql.streaming.query import StreamingQuery
 
-from flow4df import Table, UpstreamTables, Transformation
+from flow4df import Table, Transformation
 from flow4df import Trigger, DataInterval
 from flow4df.enums import OutputMode
 
@@ -14,7 +13,7 @@ Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
 
 class StreamingTransform(Protocol):
     def __call__(
-        self, spark: SparkSession, upstream_tables: UpstreamTables,
+        self, spark: SparkSession, this_table: Table,
     ) -> DataFrame:
         ...
 
@@ -27,19 +26,15 @@ class StructuredStreamingTransformation(Transformation):
     checkpoint_dir: str = '_checkpoint'
 
     def _build_data_frame(
-        self,
-        spark: SparkSession,
-        this_table: Table,
-        upstream_tables: UpstreamTables
+        self, spark: SparkSession, this_table: Table,
     ) -> DataFrame:
-        df = self.transform(spark=spark, upstream_tables=upstream_tables)
+        df = self.transform(spark=spark, this_table=this_table)
         return df
 
     def run_transformation(
         self,
         spark: SparkSession,
         this_table: Table,
-        upstream_tables: UpstreamTables,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None
     ) -> StreamingQuery | None:
@@ -49,7 +44,6 @@ class StructuredStreamingTransformation(Transformation):
         df = self._build_data_frame(
             spark=spark,
             this_table=this_table,
-            upstream_tables=upstream_tables,
         )
         cp_location = this_table.storage.build_checkpoint_location(
             table_identifier=this_table.table_identifier,
@@ -76,26 +70,22 @@ class StructuredStreamingTransformation(Transformation):
         assert isinstance(writer, DataStreamWriter)
         return writer.start()
 
-    # def test_transformation(
-    #     self,
-    #     spark: SparkSession,
-    #     schema: T.StructType,
-    #     this_: Storage,
-    #     upstream_storage_stubs: UpstreamStorages,
-    #     trigger: Trigger | None = None,
-    #     data_interval: DataInterval | None = None
-    # ) -> None:
-    #     """
-    #     Test if the `transform` is valid for Structured Streaming. Also assert
-    #     it produces a DataFrame with the expected schema.
-    #     """
-    #     del trigger
-    #     _m = 'StructuredStreaming should not receive `data_interval`!'
-    #     assert data_interval is None, _m
+    def test_transformation(
+        self,
+        spark: SparkSession,
+        this_table: Table,
+        trigger: Trigger | None = None,
+        data_interval: DataInterval | None = None
+    ) -> None:
+        """
+        Test if the `transform` is valid for Structured Streaming. Also assert
+        it produces a DataFrame with the expected schema.
+        """
+        del trigger
+        _m = 'StructuredStreaming should not receive `data_interval`!'
+        assert data_interval is None, _m
 
-    #     tdf = self._build_data_frame(
-    #         spark=spark,
-    #         this_storage=this_storage_stub,
-    #         upstream_storages=upstream_storage_stubs,
-    #     )
-    #     assertSchemaEqual(actual=tdf.schema, expected=schema)
+        tdf = self._build_data_frame(spark=spark, this_table=this_table)
+        # TODO: assert the schemas are equivalent!
+        # assertSchemaEqual(actual=tdf.schema, expected=schema)
+        return None

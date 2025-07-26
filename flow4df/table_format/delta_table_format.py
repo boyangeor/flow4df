@@ -7,10 +7,11 @@ from dataclasses import dataclass, field
 from pyspark.sql import SparkSession, DataFrame, Column, Window
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
-from pyspark.sql.types import StructType
+from pyspark.sql.types import LongType, StructType
 
 from flow4df import types
 from flow4df import TableFormat
+from flow4df.table_format.table_format import TableStats
 from flow4df import DataInterval, PartitionSpec
 
 log = logging.getLogger()
@@ -119,6 +120,23 @@ class DeltaTableFormat(TableFormat):
 
         return None
 
+    def calculate_table_stats(
+        self, spark: SparkSession, location: str
+    ) -> TableStats:
+        raw_log_snapshot = DeltaTableFormat.build_log_snapshot_df(
+            spark=spark, location=location
+        )
+        file_row_count = F.get_json_object('stats', '$.numRecords')
+        size_gib = F.sum('size') / F.lit(1_073_741_824)
+        agg_cols = [
+            F.count('*').alias('file_count'),
+            F.sum(file_row_count.cast(LongType())).alias('row_count'),
+            size_gib.alias('size_gib'),
+        ]
+        stats_df = raw_log_snapshot.select(agg_cols)
+        stats_row = stats_df.collect()[0]
+        return TableStats(**stats_row.asDict())
+
     @staticmethod
     def build_log_snapshot_df(spark: SparkSession, location: str) -> DataFrame:
         j_logs = [
@@ -167,7 +185,7 @@ class DeltaTableFormat(TableFormat):
 
         partition_spec.time_non_monotonic
         non_increasing: list[Column] = [
-            part_struct.getField(e.name)
+            part_struct.getField(e)
             for e in partition_spec.time_non_monotonic
         ]
         w1 = Window.partitionBy(*non_increasing).orderBy(part_struct)

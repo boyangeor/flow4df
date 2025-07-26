@@ -6,16 +6,18 @@ from pyspark.sql import SparkSession, DataFrame
 
 ROWS_PER_BATCH = 10
 
+
 def build_table() -> flow4df.Table:
     table_schema = T.StructType([
         T.StructField('timestamp', T.TimestampType(), True),
-        T.StructField('value', T.LongType(), True)
+        T.StructField('value', T.LongType(), True),
+        T.StructField('event_date', T.DateType(), True),
     ])
 
     def transform(
-        spark: SparkSession, upstream_tables: flow4df.UpstreamTables
+        spark: SparkSession, this_table: flow4df.Table
     ) -> DataFrame:
-        del upstream_tables
+        del this_table
         df = (
             spark.readStream.format('rate-micro-batch')
             .option('rowsPerBatch', ROWS_PER_BATCH)
@@ -45,12 +47,15 @@ def build_table() -> flow4df.Table:
         table_identifier=table_identifier,
         upstream_tables=[],
         transformation=transformation,
-        table_format=flow4df.DeltaTableFormat(merge_schema=True),
+        table_format=flow4df.DeltaTableFormat(
+            stateful_query_source=True, merge_schema=True
+        ),
         storage=flow4df.LocalStorage(prefix='/dev/shm'),
         # storage=flow4df.LocalStorage(prefix='/tmp'),
         storage_stub=flow4df.LocalStorage(prefix='/tmp'),
         partition_spec=part_spec,
     )
+
 
 @pytest.mark.slow
 def test_rmb_table_1(spark: SparkSession) -> None:
@@ -58,6 +63,5 @@ def test_rmb_table_1(spark: SparkSession) -> None:
     handle = table.run(spark=spark, trigger={'availableNow': True})
     assert handle is not None
     handle.awaitTermination()
-
     df = table.as_batch_df(spark)
     assert df.count() >= ROWS_PER_BATCH
