@@ -40,7 +40,10 @@ class DeltaTableFormat(TableFormat):
         )
 
     def configure_writer(
-        self, writer: types.Writer, data_interval: DataInterval, location: str,
+        self,
+        writer: types.Writer,
+        location: str,
+        data_interval: DataInterval | None
     ) -> types.Writer:
         del data_interval
         return (
@@ -54,7 +57,7 @@ class DeltaTableFormat(TableFormat):
         self,
         spark: SparkSession,
         location: str,
-        schema: StructType,
+        table_schema: StructType,
         partition_spec: PartitionSpec,
     ) -> None:
         from delta import DeltaTable
@@ -68,7 +71,7 @@ class DeltaTableFormat(TableFormat):
             DeltaTable
             .createIfNotExists(sparkSession=spark)
             .location(adjusted_location)
-            .addColumns(schema)
+            .addColumns(table_schema)
             .partitionedBy(*partition_spec.columns)
         )
         for c in self.constraints:

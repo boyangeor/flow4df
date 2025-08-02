@@ -1,10 +1,9 @@
 import pytest
-from pyspark.sql import SparkSession
-from delta import configure_spark_with_delta_pip
-
+import tempfile
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql import types as T
 from pyspark.sql import functions as F
-from pyspark.sql import SparkSession, DataFrame
+from delta import configure_spark_with_delta_pip
 
 from flow4df import Table
 from flow4df import TableIdentifier
@@ -76,7 +75,7 @@ def example_table_1():
         merge_schema=True,
     )
     return Table(
-        schema=table_schema,
+        table_schema=table_schema,
         table_identifier=identifier,
         upstream_tables=[],
         transformation=transformation,
@@ -84,4 +83,12 @@ def example_table_1():
         storage=LocalStorage(prefix='/tmp'),
         storage_stub=LocalStorage(prefix='/tmp2'),
         partition_spec=part_spec,
+        is_active=True,
     )
+
+
+@pytest.fixture
+def temp_dir() -> str:
+    temp_dir = tempfile.TemporaryDirectory()
+    yield temp_dir.name
+    temp_dir.cleanup()

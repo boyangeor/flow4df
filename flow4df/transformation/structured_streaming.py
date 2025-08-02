@@ -4,16 +4,15 @@ from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
 from pyspark.sql.streaming.readwriter import DataStreamWriter
 from pyspark.sql.streaming.query import StreamingQuery
 
-from flow4df import Table, Transformation
-from flow4df import Trigger, DataInterval
-from flow4df.enums import OutputMode
+import flow4df
+from flow4df.table import Transformation
 
 Writer: TypeAlias = Union[DataFrameWriter, DataStreamWriter]
 
 
 class StreamingTransform(Protocol):
     def __call__(
-        self, spark: SparkSession, this_table: Table,
+        self, spark: SparkSession, this_table: flow4df.Table,
     ) -> DataFrame:
         ...
 
@@ -21,12 +20,12 @@ class StreamingTransform(Protocol):
 @dataclass(frozen=True, kw_only=True)
 class StructuredStreamingTransformation(Transformation):
     transform: StreamingTransform
-    output_mode: OutputMode
-    default_trigger: Trigger
+    output_mode: flow4df.enums.OutputMode
+    default_trigger: flow4df.Trigger
     checkpoint_dir: str = '_checkpoint'
 
     def _build_data_frame(
-        self, spark: SparkSession, this_table: Table,
+        self, spark: SparkSession, this_table: flow4df.Table,
     ) -> DataFrame:
         df = self.transform(spark=spark, this_table=this_table)
         return df
@@ -34,9 +33,9 @@ class StructuredStreamingTransformation(Transformation):
     def run_transformation(
         self,
         spark: SparkSession,
-        this_table: Table,
-        trigger: Trigger | None = None,
-        data_interval: DataInterval | None = None
+        this_table: flow4df.Table,
+        trigger: flow4df.Trigger | None = None,
+        data_interval: flow4df.DataInterval | None = None
     ) -> StreamingQuery | None:
         _m = 'StructuredStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
@@ -73,9 +72,9 @@ class StructuredStreamingTransformation(Transformation):
     def test_transformation(
         self,
         spark: SparkSession,
-        this_table: Table,
-        trigger: Trigger | None = None,
-        data_interval: DataInterval | None = None
+        this_table: flow4df.Table,
+        trigger: flow4df.Trigger | None = None,
+        data_interval: flow4df.DataInterval | None = None
     ) -> None:
         """
         Test if the `transform` is valid for Structured Streaming. Also assert
@@ -86,6 +85,7 @@ class StructuredStreamingTransformation(Transformation):
         assert data_interval is None, _m
 
         tdf = self._build_data_frame(spark=spark, this_table=this_table)
-        # TODO: assert the schemas are equivalent!
-        # assertSchemaEqual(actual=tdf.schema, expected=schema)
+        flow4df.tools.schema.assert_schemas_equivalent(
+            spark=spark, actual=tdf.schema, expected=this_table.table_schema,
+        )
         return None

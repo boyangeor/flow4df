@@ -43,7 +43,7 @@ class TableFormat(Protocol):
         self,
         spark: SparkSession,
         location: str,
-        schema: StructType,
+        table_schema: StructType,
         partition_spec: PartitionSpec
     ) -> None:
         """Initializes the table e.g. creates an empty Delta table."""

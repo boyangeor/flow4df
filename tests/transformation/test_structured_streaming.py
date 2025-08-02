@@ -4,8 +4,10 @@ from pyspark.sql import types as T
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
 
+ROWS_PER_BATCH = 10
 
-def build_table() -> flow4df.Table:
+
+def build_table(temp_dir: str) -> flow4df.Table:
     table_schema = T.StructType([
         T.StructField('timestamp', T.TimestampType(), True),
         T.StructField('value', T.LongType(), True),
@@ -15,11 +17,10 @@ def build_table() -> flow4df.Table:
     def transform(
         spark: SparkSession, this_table: flow4df.Table
     ) -> DataFrame:
-        del this_table
         df = (
             spark.readStream
             .format('rate-micro-batch')
-            .option('rowsPerBatch', 5)
+            .option('rowsPerBatch', ROWS_PER_BATCH)
             .option('advanceMsPerBatch', 3600 * 1000)
             .load()
         )
@@ -37,8 +38,8 @@ def build_table() -> flow4df.Table:
         time_monotonic_increasing=['event_date'],
     )
     table_identifier = flow4df.TableIdentifier(
-        catalog='testflow4df',
-        schema='testdelta',
+        catalog='catalog1',
+        schema=__name__.split('.')[-1],
         name='fct_event_1',
         version='1',
     )
@@ -47,36 +48,29 @@ def build_table() -> flow4df.Table:
         merge_schema=True
     )
     return flow4df.Table(
-        schema=table_schema,
+        table_schema=table_schema,
         table_identifier=table_identifier,
         upstream_tables=[],
         transformation=transformation,
         table_format=table_format,
-        storage=flow4df.LocalStorage(prefix='/tmp'),
-        storage_stub=flow4df.LocalStorage(prefix='/tmp'),
+        storage=flow4df.LocalStorage(prefix=temp_dir),
+        storage_stub=flow4df.LocalStorage(prefix=temp_dir),
         partition_spec=part_spec,
+        is_active=True,
     )
 
 
 @pytest.mark.slow
-def test_delta_maintenance(spark: SparkSession) -> None:
-    table = build_table()
-    table.init_table(spark=spark)
-    # Trigger it few times
-    for i in range(2):
-        handle = table.run(spark, trigger={'availableNow': True})
-        assert handle is not None
-        handle.awaitTermination()
+def test_run_transformation(spark: SparkSession, temp_dir: str) -> None:
+    table = build_table(temp_dir=temp_dir)
+    handle = table.run(spark=spark, trigger={'availableNow': True})
+    assert handle is not None
+    handle.awaitTermination()
+    df = table.as_batch_df(spark)
+    assert df.count() >= ROWS_PER_BATCH
 
-    stats_before = table.calculate_table_stats(spark)
-    # Run the maintenance
-    table.run_table_maintenance(spark, run_for=None)
 
-    stats_after = table.calculate_table_stats(spark)
-    # The row count should be the same
-    _m = 'Maintenance changed the row count!'
-    assert stats_before.row_count == stats_after.row_count, _m
-    # The file count should be smaller
-    _m = 'Maintenance did not reduce the file count'
-    assert stats_before.file_count > stats_after.file_count, _m
-    return None
+@pytest.mark.slow
+def test_test_transformation(spark: SparkSession, temp_dir: str) -> None:
+    table = build_table(temp_dir=temp_dir)
+    table.test_transformation(spark=spark)

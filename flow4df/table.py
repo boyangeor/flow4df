@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 import functools
 import datetime as dt
-from typing import Any, Protocol
+from typing import Any, Protocol, Callable
 from pyspark.sql import types as T
 from dataclasses import dataclass, field, fields
 from pyspark.sql import SparkSession, DataFrame
@@ -16,9 +16,32 @@ from flow4df.table_stats import TableStats
 log = logging.getLogger(__name__)
 
 
+def fill_in_spark_session(func: Callable[..., Any]) -> Callable[..., Any]:
+
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs) -> Any:
+        no_spark_in_args = len(args) < 2
+        no_spark_in_kwargs = kwargs.get('spark') is None
+        if no_spark_in_args and no_spark_in_kwargs:
+            spark = SparkSession.getActiveSession()
+            _m = f'Provide SparkSession to {func.__name__}'
+            assert spark is not None, _m
+            kwargs['spark'] = spark
+        elif not no_spark_in_args:
+            _m = 'First positional argument is not a SparkSesssion!'
+            assert isinstance(args[1], SparkSession), _m
+        elif not no_spark_in_kwargs:
+            _m = 'Argument `spark` must be a SparkSession!'
+            assert isinstance(kwargs.get('spark'), SparkSession), _m
+
+        return func(*args, **kwargs)
+
+    return _wrapper
+
+
 @dataclass(frozen=False, kw_only=True)
 class Table:
-    schema: T.StructType = field(repr=False)
+    table_schema: T.StructType = field(repr=False)
     table_identifier: TableIdentifier
     upstream_tables: list[Table] = field(default_factory=list, repr=False)
     transformation: Transformation
@@ -26,6 +49,7 @@ class Table:
     storage: Storage
     storage_stub: Storage
     partition_spec: PartitionSpec
+    is_active: bool
 
     @functools.cached_property
     def location(self) -> str:
@@ -35,7 +59,7 @@ class Table:
     def column_types(self) -> dict[str, T.DataType]:
         """<column_name>:<column_type> mapping."""
         return {
-            e.name: e.dataType for e in self.schema.fields
+            e.name: e.dataType for e in self.table_schema.fields
         }
 
     def init_table(self, spark: SparkSession) -> None:
@@ -43,7 +67,7 @@ class Table:
         self.table_format.init_table(
             spark=spark,
             location=self.location,
-            schema=self.schema,
+            table_schema=self.table_schema,
             partition_spec=self.partition_spec
         )
 
@@ -53,7 +77,7 @@ class Table:
         self.table_format.init_table(
             spark=spark,
             location=stub_location,
-            schema=self.schema,
+            table_schema=self.table_schema,
             partition_spec=self.partition_spec
         )
 
@@ -70,9 +94,13 @@ class Table:
             configured_reader = configured_reader.options(**options)
         return configured_reader.load()
 
+    @fill_in_spark_session
     def as_batch_df(
-        self, spark: SparkSession, options: dict[str, Any] | None = None,
+        self,
+        spark: SparkSession | None = None,
+        options: dict[str, Any] | None = None,
     ) -> DataFrame:
+        assert spark is not None
         return self._as_df(
             reader=spark.read, location=self.location, options=options
         )
@@ -93,12 +121,14 @@ class Table:
         assert len(requested_table) == 1, _m
         return requested_table[0]
 
+    @fill_in_spark_session
     def run(
         self,
-        spark: SparkSession,
+        spark: SparkSession | None = None,
         trigger: Trigger | None = None,
         data_interval: DataInterval | None = None,
     ) -> StreamingQuery | None:
+        assert spark is not None
         return self.transformation.run_transformation(
             spark=spark,
             this_table=self,
@@ -117,6 +147,9 @@ class Table:
             run_for=run_for,
         )
         return None
+
+    def test_transformation(self, spark: SparkSession) -> None:
+        self.transformation.test_transformation(spark=spark, this_table=self)
 
     def calculate_table_stats(self, spark: SparkSession) -> TableStats:
         return self.table_format.calculate_table_stats(spark, self.location)

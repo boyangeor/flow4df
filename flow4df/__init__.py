@@ -16,3 +16,5 @@ from flow4df.table import Table, Transformation
 from flow4df.transformation.structured_streaming import (
     StructuredStreamingTransformation
 )
+
+from flow4df import tools

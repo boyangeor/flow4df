@@ -19,6 +19,7 @@ classifiers = [
 
 dependencies = [
     "pyspark~=3.5",
+    "setuptools",
 ]
 
 [project.optional-dependencies]
