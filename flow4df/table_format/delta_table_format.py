@@ -10,7 +10,7 @@ from pyspark.sql import types as T
 from pyspark.sql.types import LongType, StructType
 
 from flow4df import types
-from flow4df import TableFormat
+from flow4df.table_format.table_format import TableFormat
 from flow4df.table_format.table_format import TableStats
 from flow4df import DataInterval, PartitionSpec
 

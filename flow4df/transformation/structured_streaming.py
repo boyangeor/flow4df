@@ -24,12 +24,6 @@ class StructuredStreamingTransformation(Transformation):
     default_trigger: flow4df.Trigger
     checkpoint_dir: str = '_checkpoint'
 
-    def _build_data_frame(
-        self, spark: SparkSession, this_table: flow4df.Table,
-    ) -> DataFrame:
-        df = self.transform(spark=spark, this_table=this_table)
-        return df
-
     def run_transformation(
         self,
         spark: SparkSession,
@@ -40,10 +34,8 @@ class StructuredStreamingTransformation(Transformation):
         _m = 'StructuredStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
         # Call the Transform to obtain the DataFrame
-        df = self._build_data_frame(
-            spark=spark,
-            this_table=this_table,
-        )
+        df = self.transform(spark=spark, this_table=this_table)
+
         cp_location = this_table.storage.build_checkpoint_location(
             table_identifier=this_table.table_identifier,
             checkpoint_dir=self.checkpoint_dir
@@ -84,7 +76,7 @@ class StructuredStreamingTransformation(Transformation):
         _m = 'StructuredStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
 
-        tdf = self._build_data_frame(spark=spark, this_table=this_table)
+        tdf = self.transform(spark=spark, this_table=this_table)
         flow4df.tools.schema.assert_schemas_equivalent(
             spark=spark, actual=tdf.schema, expected=this_table.table_schema,
         )

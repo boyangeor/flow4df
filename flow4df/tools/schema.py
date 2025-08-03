@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from pyspark.sql.types import StructType
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame, Column
@@ -33,3 +34,10 @@ def assert_schemas_equivalent(
         raise AssertionError('Schemas not nequivalent!')
 
     return None
+
+
+def assert_columns_in_schema(
+    columns: Iterable[str], schema: StructType
+) -> None:
+    diff = set(columns) - set(schema.fieldNames())
+    assert len(diff) == 0, f'{diff} not in schema.'

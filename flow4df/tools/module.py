@@ -19,7 +19,6 @@ def list_modules(package: str) -> list[ModuleType]:
     """
     spec = importlib.util.find_spec(package)
     package_posix_path = spec.submodule_search_locations[0]
-
     modules = []
 
     # find top level modules

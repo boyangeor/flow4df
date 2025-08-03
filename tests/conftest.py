@@ -39,7 +39,8 @@ def spark():
 def example_table_1():
     table_schema = T.StructType([
         T.StructField('timestamp', T.TimestampType(), True),
-        T.StructField('value', T.LongType(), True)
+        T.StructField('value', T.LongType(), True),
+        T.StructField('event_date', T.DateType(), True),
     ])
 
     def transform(

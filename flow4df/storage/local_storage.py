@@ -1,6 +1,7 @@
 from pathlib import Path
 from dataclasses import dataclass
-from flow4df import Storage, TableIdentifier
+from flow4df import TableIdentifier
+from flow4df.storage.storage import Storage
 
 
 @dataclass(frozen=True, kw_only=True)
