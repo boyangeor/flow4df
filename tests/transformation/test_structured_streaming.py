@@ -17,6 +17,7 @@ def build_table(temp_dir: str) -> flow4df.Table:
     def transform(
         spark: SparkSession, this_table: flow4df.Table
     ) -> DataFrame:
+        del this_table
         df = (
             spark.readStream
             .format('rate-micro-batch')

@@ -28,6 +28,7 @@ class Constraint:
 class DeltaTableFormat(TableFormat):
     stateful_query_source: bool
     merge_schema: bool = True
+    idempotency_from_data_interval: bool = True
     constraints: list[Constraint] = field(default_factory=list)
 
     def configure_reader(
@@ -45,13 +46,30 @@ class DeltaTableFormat(TableFormat):
         location: str,
         data_interval: DataInterval | None
     ) -> types.Writer:
-        del data_interval
-        return (
+        """Configures the given Writer and returns it.
+
+        Sets:
+            - .format('delta')
+            - .option('path', '<location>')
+            - .option('mergeSchema', True|False)
+            For idempotency of batch writes:
+            - .option('txnAppId', 'flow4df_run')
+            - .option('txnVersion', <data_interval.start_unix_ts_seconds>)
+        """
+        conf_writer = (
             writer
             .format(TABLE_FORMAT_NAME)
             .option('path', location)
             .option('mergeSchema', self.merge_schema)
         )
+        if data_interval is not None and self.idempotency_from_data_interval:
+            conf_writer = (
+                conf_writer
+                .option('txnAppId', 'flow4df_run')
+                .option('txnVersion', data_interval.start_unix_ts_seconds)
+            )
+
+        return conf_writer
 
     def init_table(
         self,

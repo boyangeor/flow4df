@@ -29,7 +29,7 @@ class StructuredStreamingTransformation(Transformation):
         spark: SparkSession,
         this_table: flow4df.Table,
         trigger: flow4df.Trigger | None = None,
-        data_interval: flow4df.DataInterval | None = None
+        data_interval: flow4df.DataInterval | None = None,
     ) -> StreamingQuery | None:
         _m = 'StructuredStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
@@ -56,7 +56,7 @@ class StructuredStreamingTransformation(Transformation):
             .queryName(f'streaming_query_{table_id}')
         )
         writer = this_table.table_format.configure_writer(
-            writer, data_interval=data_interval, location=this_table.location
+            writer, location=this_table.location, data_interval=None
         )
         assert isinstance(writer, DataStreamWriter)
         return writer.start()

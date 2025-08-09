@@ -146,8 +146,8 @@ class Table:
     def run(
         self,
         spark: SparkSession | None = None,
-        trigger: Trigger | None = None,
-        data_interval: DataInterval | None = None,
+        trigger: flow4df.Trigger | None = None,
+        data_interval: flow4df.DataInterval | None = None,
     ) -> StreamingQuery | None:
         assert spark is not None
         return self.transformation.run_transformation(
@@ -169,8 +169,14 @@ class Table:
         )
         return None
 
-    def test_transformation(self, spark: SparkSession) -> None:
-        self.transformation.test_transformation(spark=spark, this_table=self)
+    def test_transformation(
+        self,
+        spark: SparkSession,
+        data_interval: flow4df.DataInterval | None = None,
+    ) -> None:
+        self.transformation.test_transformation(
+            spark=spark, this_table=self, data_interval=data_interval
+        )
 
     def calculate_table_stats(self, spark: SparkSession) -> TableStats:
         return self.table_format.calculate_table_stats(spark, self.location)

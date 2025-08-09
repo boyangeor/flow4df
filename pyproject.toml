@@ -34,7 +34,7 @@ dev = [
 # ]
 emacs = [
     "ipython",
-    "pyright[nodejs]",
+    "pyright[nodejs]==1.1.382",
     "setuptools",
     "pip",
     "flake8",

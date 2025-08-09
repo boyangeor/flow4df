@@ -32,6 +32,14 @@ class DataInterval:
         assert self._is_tz_aware(self.start), _m
         assert self._is_tz_aware(self.end), _m
 
+    @property
+    def start_unix_ts_seconds(self) -> int:
+        return int(self.start.timestamp())
+
+    @property
+    def end_unix_ts_seconds(self) -> int:
+        return int(self.end.timestamp())
+
     @staticmethod
     def _is_tz_aware(d: dt.datetime) -> bool:
         return (d.tzinfo is not None) and (d.tzinfo.utcoffset is not None)
