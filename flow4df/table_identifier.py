@@ -31,3 +31,7 @@ class TableIdentifier:
     @functools.cached_property
     def table_id(self) -> str:
         return f'{self.catalog}.{self.schema}.{self.name}_v{self.version}'
+
+    @functools.cached_property
+    def full_name(self) -> str:
+        return f'{self.catalog}.{self.schema}.{self.name}_v{self.version}'

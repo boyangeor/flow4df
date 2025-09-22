@@ -18,7 +18,7 @@ def transform(
     df = (
         spark.readStream.format('rate-micro-batch')
         .option('rowsPerBatch', 5)
-        .option('advanceMsPerBatch', 3600 * 1000)
+        .option('advanceMillisPerBatch', 3600 * 1000)
         .load()
     )
     df = df.withColumns({

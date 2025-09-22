@@ -1,3 +1,4 @@
+import datetime as dt
 from typing import Protocol
 from dataclasses import dataclass
 from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
@@ -38,11 +39,10 @@ class BatchTransformation(Transformation):
             spark=spark, this_table=this_table, data_interval=data_interval
         )
         # Build and configure the Writer
-        writer = (
-            transformed_df
-            .write
-            .mode(self.output_mode.name)
-            .partitionBy(*this_table.partition_spec.columns)
+        writer = this_table.table_format.build_batch_writer(
+            df=transformed_df,
+            output_mode=self.output_mode,
+            partition_spec=this_table.partition_spec
         )
         writer = this_table.table_format.configure_writer(
             writer=writer,
@@ -77,3 +77,17 @@ class BatchTransformation(Transformation):
             expected=this_table.table_schema,
         )
         return None
+
+    def build_next_data_interval(
+        self,
+        # upstream_watermark: dt.datetime,
+        # last_data_interval: flow4df.DataInterval
+        spark: SparkSession,
+        this_table: flow4df.Table,
+    ) -> flow4df.DataInterval | None:
+        del spark, this_table
+        _m = (
+            '`build_next_data_interval` not applicable for BatchTransformation'
+            '!'
+        )
+        raise NotImplementedError(_m)

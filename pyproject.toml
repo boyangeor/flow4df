@@ -38,6 +38,7 @@ emacs = [
     "setuptools",
     "pip",
     "flake8",
+    "pylint"
 ]
 
 [project.urls]

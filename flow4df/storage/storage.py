@@ -10,3 +10,6 @@ class Storage(Protocol):
         self, table_identifier: TableIdentifier, checkpoint_dir: str,
     ) -> str:
         ...
+
+    def build_catalog_location(self, table_identifier: TableIdentifier) -> str:
+        ...

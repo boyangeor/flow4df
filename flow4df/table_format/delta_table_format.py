@@ -1,18 +1,20 @@
 import re
+import json
 import logging
 import operator
 import functools
 import datetime as dt
 from dataclasses import dataclass, field
-from pyspark.sql import SparkSession, DataFrame, Column, Window
+from pyspark.sql import SparkSession, DataFrame, Column, Window, Row
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 from pyspark.sql.types import LongType, StructType
 
-from flow4df import types
+from flow4df import types, enums
 from flow4df.table_format.table_format import TableFormat
 from flow4df.table_format.table_format import TableStats
-from flow4df import DataInterval, PartitionSpec
+from flow4df import DataInterval, PartitionSpec, TableIdentifier
+from flow4df.column_stats import ColumnStats
 
 log = logging.getLogger()
 TABLE_FORMAT_NAME = 'delta'
@@ -30,6 +32,21 @@ class DeltaTableFormat(TableFormat):
     merge_schema: bool = True
     idempotency_from_data_interval: bool = True
     constraints: list[Constraint] = field(default_factory=list)
+
+    def build_batch_writer(
+        self,
+        df: DataFrame,
+        table_identifier: TableIdentifier,
+        output_mode: enums.OutputMode,
+        partition_spec: PartitionSpec,
+    ) -> types.Writer:
+        writer = (
+            df
+            .write
+            .mode(output_mode.name)
+            .partitionBy(*partition_spec.columns)
+        )
+        return writer
 
     def configure_reader(
         self, reader: types.Reader, location: str
@@ -69,15 +86,27 @@ class DeltaTableFormat(TableFormat):
                 .option('txnVersion', data_interval.start_unix_ts_seconds)
             )
 
+        if data_interval is not None:
+            user_md = {'data_interval': data_interval.as_dict()}
+            user_md_json = json.dumps(
+                user_md, separators=(',', ':'), default=lambda x: x.isoformat()
+            )
+            conf_writer = (
+                conf_writer
+                .option('userMetadata', user_md_json)
+            )
+
         return conf_writer
 
     def init_table(
         self,
         spark: SparkSession,
         location: str,
+        table_identifier: TableIdentifier,
         table_schema: StructType,
         partition_spec: PartitionSpec,
     ) -> None:
+        del table_identifier
         from delta import DeltaTable
         # Issue when setting file:///tmp/blah as location
         # `CREATE TABLE contains two different locations:`
@@ -141,6 +170,11 @@ class DeltaTableFormat(TableFormat):
 
         return None
 
+    def configure_session(
+        self, spark: SparkSession, catalog_location: str
+    ) -> None:
+        return None
+
     def calculate_table_stats(
         self, spark: SparkSession, location: str
     ) -> TableStats:
@@ -157,6 +191,117 @@ class DeltaTableFormat(TableFormat):
         stats_df = raw_log_snapshot.select(agg_cols)
         stats_row = stats_df.collect()[0]
         return TableStats(**stats_row.asDict())
+
+    def get_column_stats(
+        self,
+        spark: SparkSession,
+        location: str,
+        column_types: dict[str, T.DataType],
+        column_name: str,
+        table_identifier: TableIdentifier,
+    ) -> ColumnStats:
+        """TODO: Provide non Spark based implementation too."""
+        del table_identifier
+        raw_log_snapshot = DeltaTableFormat.build_log_snapshot_df(
+            spark=spark, location=location
+        )
+        column_type = column_types[column_name]
+
+        part_value = (
+            F.col('partitionValues').getItem(column_name).cast(column_type)
+        )
+        f_min_value = F.coalesce(
+            F.get_json_object('stats', f'$.minValues.{column_name}'),
+            part_value
+        )
+        f_max_value = F.coalesce(
+            F.get_json_object('stats', f'$.maxValues.{column_name}'),
+            part_value
+        )
+        f_min_value = f_min_value.cast(column_type)
+        f_max_value = f_max_value.cast(column_type)
+        if column_type == T.TimestampType():
+            f_min_value = F.unix_seconds(f_min_value)
+            f_max_value = F.unix_seconds(f_max_value)
+
+        f_null_count = F.get_json_object('stats', f'$.nullCount.{column_name}')
+        f_row_count = F.get_json_object('stats', '$.numRecords')
+        agg_cols = [
+            F.min(f_min_value).alias('min_value'),
+            F.max(f_max_value).alias('max_value'),
+            F.sum(f_row_count).alias('row_count'),
+            F.sum(f_null_count).alias('null_count'),
+        ]
+        raw_log_snapshot.select('stats').show(10, False)
+        column_stats_df = raw_log_snapshot.select(agg_cols)
+        column_stats_row = column_stats_df.collect()[0]
+        column_stats_dict = column_stats_row.asDict()
+        if column_type == T.TimestampType():
+            for k in ['min_value', 'max_value']:
+                column_stats_dict[k] = dt.datetime.fromtimestamp(
+                    column_stats_row[k], tz=dt.UTC
+                )
+
+        return ColumnStats(column_name=column_name, **column_stats_dict)
+
+    def is_initialized_only(
+        self,
+        spark: SparkSession,
+        location: str,
+        table_identifier: TableIdentifier,
+    ) -> bool:
+        from delta import DeltaTable
+        as_delta_table = DeltaTable.forPath(sparkSession=spark, path=location)
+        last_operation = as_delta_table.history(limit=1).collect()[0]
+        return last_operation['operation'] == 'CREATE TABLE'
+
+    def get_last_append_operation(
+        self,
+        spark: SparkSession,
+        location: str,
+        look_back_limit: int,
+    ) -> Row | None:
+        """TODO: Provide non Spark based implementation too."""
+        from delta import DeltaTable
+        as_delta_table = DeltaTable.forPath(sparkSession=spark, path=location)
+        history_df = as_delta_table.history(limit=look_back_limit)
+        last_operation_rows = (
+            history_df
+            .where(F.col('operation') == F.lit('WRITE'))
+            .orderBy(F.col('version').desc())
+            .take(1)
+        )
+        last_operation = None
+        if len(last_operation_rows) == 1:
+            last_operation = last_operation_rows[0]
+
+        return last_operation
+
+    def get_last_batch_data_interval(
+        self,
+        spark: SparkSession,
+        location: str,
+        table_identifier: TableIdentifier,
+    ) -> DataInterval:
+        del table_identifier
+        limits = [2, 8, 64, None]
+        last_append_operation = None
+        for limit in limits:
+            last_append_operation = self.get_last_append_operation(
+                spark=spark, location=location, look_back_limit=limit
+            )
+            if last_append_operation is not None:
+                break
+
+        _m = f'Cannot find last append operation in Delta log: {location}'
+        assert last_append_operation is not None, _m
+
+        parsed_md = json.loads(last_append_operation['userMetadata'])
+        raw_data_interval = parsed_md['data_interval']
+        return DataInterval.from_iso_formatted_timestamps(
+            start_iso_timestamp=raw_data_interval['start'],
+            end_iso_timestamp=raw_data_interval['end']
+        )
 
     @staticmethod
     def build_log_snapshot_df(spark: SparkSession, location: str) -> DataFrame:

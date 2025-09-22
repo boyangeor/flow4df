@@ -1,6 +1,7 @@
 from __future__ import annotations
+import json
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 
 @dataclass(kw_only=True)
@@ -39,6 +40,17 @@ class DataInterval:
     @property
     def end_unix_ts_seconds(self) -> int:
         return int(self.end.timestamp())
+
+    def as_dict(self) -> dict[str, dt.datetime]:
+        return asdict(self)
+
+    @staticmethod
+    def from_json(json_str: str) -> DataInterval:
+        d = json.loads(json_str)
+        return DataInterval(
+            start=dt.datetime.fromisoformat(d['start']),
+            end=dt.datetime.fromisoformat(d['end']),
+        )
 
     @staticmethod
     def _is_tz_aware(d: dt.datetime) -> bool:

@@ -134,7 +134,6 @@ def test_run_transformation(spark: SparkSession, temp_dir: str) -> None:
     return None
 
 
-
 @pytest.mark.slow
 def test_test_transformation(spark: SparkSession, temp_dir: str) -> None:
     t1 = build_table_1(temp_dir=temp_dir)

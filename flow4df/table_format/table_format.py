@@ -1,11 +1,12 @@
 import datetime as dt
 from typing import Protocol
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import StructType, DataType
 
-from flow4df import types
-from flow4df import DataInterval, PartitionSpec
+from flow4df import types, enums
+from flow4df import DataInterval, PartitionSpec, TableIdentifier
 from flow4df.table_stats import TableStats
+from flow4df.column_stats import ColumnStats
 
 
 class TableFormat(Protocol):
@@ -14,6 +15,15 @@ class TableFormat(Protocol):
     "Table Format" reference:
     https://aws.amazon.com/blogs/big-data/choosing-an-open-table-format-for-your-transactional-data-lake-on-aws/  # noqa
     """
+
+    def build_batch_writer(
+        self,
+        df: DataFrame,
+        output_mode: enums.OutputMode,
+        partition_spec: PartitionSpec
+    ) -> types.Writer:
+        """Builds the required Writer."""
+        ...
 
     def configure_reader(
         self, reader: types.Reader, location: str
@@ -43,6 +53,7 @@ class TableFormat(Protocol):
         self,
         spark: SparkSession,
         location: str,
+        table_identifier: TableIdentifier,
         table_schema: StructType,
         partition_spec: PartitionSpec
     ) -> None:
@@ -69,4 +80,49 @@ class TableFormat(Protocol):
         self, spark: SparkSession, location: str
     ) -> TableStats:
         """Calculate basic stats for the table."""
+        ...
+
+    def get_column_stats(
+        self,
+        spark: SparkSession,
+        location: str,
+        column_types: dict[str, DataType],
+        column_name: str,
+        table_identifier: TableIdentifier,
+    ) -> ColumnStats:
+        """
+        Calculate basic stats for the column.
+
+        Ideally the data files should not be queried, only the meta data.
+        """
+        ...
+
+    def is_initialized_only(
+        self,
+        spark: SparkSession,
+        location: str,
+        table_identifier: TableIdentifier,
+    ) -> bool:
+        """Check if the table is only initialized, without any appends."""
+        ...
+
+    def get_last_batch_data_interval(
+        self,
+        spark: SparkSession,
+        location: str,
+        table_identifier: TableIdentifier,
+    ) -> DataInterval:
+        """Read the DataInterval of the last batch run."""
+        ...
+
+    def configure_session(
+        self,
+        spark: SparkSession,
+        table_identifier: TableIdentifier,
+        catalog_location: str,
+    ) -> None:
+        """
+        Configure the Spark Session with properties required by the
+        TableFormat implementation.
+        """
         ...

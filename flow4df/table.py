@@ -4,18 +4,22 @@ import difflib
 import logging
 import functools
 import datetime as dt
+from abc import abstractmethod
 from types import ModuleType
 from typing import Any, Protocol, Callable
 from pyspark.sql import types as T
 from dataclasses import dataclass, field, fields
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
+from pyspark.sql import DataFrameWriter, DataFrameWriterV2
+from pyspark.sql.streaming.readwriter import DataStreamWriter
 
 import flow4df
-from flow4df import types
+from flow4df import types, enums
 from flow4df.table_format.table_format import TableFormat
 from flow4df.storage.storage import Storage
 from flow4df.table_stats import TableStats
+from flow4df.column_stats import ColumnStats
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +86,7 @@ class Table:
         self.table_format.init_table(
             spark=spark,
             location=self.location,
+            table_identifier=self.table_identifier,
             table_schema=self.table_schema,
             partition_spec=self.partition_spec
         )
@@ -178,8 +183,61 @@ class Table:
             spark=spark, this_table=self, data_interval=data_interval
         )
 
+    @fill_in_spark_session
+    def get_column_stats(
+        self,
+        column_name: str,
+        spark: SparkSession | None = None,
+    ) -> ColumnStats:
+        assert spark is not None
+        return self.table_format.get_column_stats(
+            spark=spark,
+            location=self.location,
+            column_types=self.column_types,
+            column_name=column_name,
+            table_identifier=self.table_identifier
+        )
+
+    @fill_in_spark_session
+    def get_last_batch_data_interval(
+        self, spark: SparkSession | None = None,
+    ) -> flow4df.DataInterval:
+        assert spark is not None
+        return self.table_format.get_last_batch_data_interval(
+            spark=spark,
+            location=self.location,
+            table_identifier=self.table_identifier
+        )
+
+    @fill_in_spark_session
+    def is_initialized_only(self, spark: SparkSession | None = None) -> bool:
+        return self.table_format.is_initialized_only(
+            spark=spark,
+            location=self.location,
+            table_identifier=self.table_identifier
+        )
+
+    @fill_in_spark_session
+    def build_next_data_interval(
+        self, spark: SparkSession | None = None,
+    ) -> flow4df.DataInterval:
+        return self.transformation.build_next_data_interval(
+            spark=spark, this_table=self
+        )
+
     def calculate_table_stats(self, spark: SparkSession) -> TableStats:
         return self.table_format.calculate_table_stats(spark, self.location)
+
+    def configure_session(self, spark: SparkSession) -> None:
+        catalog_location = self.storage.build_catalog_location(
+            self.table_identifier
+        )
+        self.table_format.configure_session(
+            spark=spark,
+            table_identifier=self.table_identifier,
+            catalog_location=catalog_location
+        )
+        return None
 
     def _build_stub_table(self) -> Table:
         table_fields = fields(Table)
@@ -230,6 +288,7 @@ class UnitTestTable(Table):
 
 class Transformation(Protocol):
 
+    @abstractmethod
     def run_transformation(
         self,
         spark: SparkSession,
@@ -239,6 +298,7 @@ class Transformation(Protocol):
     ) -> StreamingQuery | None:
         ...
 
+    @abstractmethod
     def test_transformation(
         self,
         spark: SparkSession,
@@ -247,3 +307,19 @@ class Transformation(Protocol):
         data_interval: flow4df.DataInterval | None = None,
     ) -> None:
         ...
+
+    def build_next_data_interval(
+        self, spark: SparkSession, this_table: Table,
+    ) -> flow4df.DataInterval | None:
+        raise
+
+    def start_writer(
+        self, writer: types.Writer, output_mode: enums.OutputMode
+    ) -> StreamingQuery | None:
+        if isinstance(writer, DataFrameWriter):
+            return writer.save()
+        elif isinstance(writer, DataStreamWriter):
+            return writer.start()
+        elif isinstance(writer, DataFrameWriterV2):
+            if output_mode == enums.OutputMode.append:
+                return writer.append()

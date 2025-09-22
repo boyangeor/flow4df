@@ -55,3 +55,6 @@ class LocalStorage(Storage):
         )
         return path.as_uri()
 
+    def build_catalog_location(self, table_identifier: TableIdentifier) -> str:
+        path = Path(self.prefix, table_identifier.catalog)
+        return path.as_uri()
