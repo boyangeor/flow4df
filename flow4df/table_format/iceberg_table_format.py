@@ -9,7 +9,7 @@ from pyspark.sql import SparkSession, DataFrame, Column, Window, Row
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 from pyspark.sql.types import LongType, StructType
-from pyspark.sql.streaming import DataStreamWriter
+from pyspark.sql.streaming.readwriter import DataStreamWriter
 
 from flow4df import types, enums
 from flow4df.table_format.table_format import TableFormat
@@ -31,14 +31,18 @@ class IcebergTableFormat(TableFormat):
         table_schema: StructType,
         partition_spec: PartitionSpec,
     ) -> None:
-        empty_df = spark.createDataFrame([], schema=table_schema)
+        del location
+        table_exists = spark.catalog.tableExists(table_identifier.full_name)
+        if not table_exists:
+            empty_df = spark.createDataFrame([], schema=table_schema)
+            part_cols = [F.col(c) for c in partition_spec.columns]
+            writer_v2 = (
+                empty_df
+                .writeTo(table_identifier.full_name)
+                .partitionedBy(*part_cols)
+            )
+            writer_v2.create()
 
-        writer_v2 = (
-            empty_df
-            .writeTo(table_identifier.full_name)
-            .partitionedBy(*partition_spec.columns)
-        )
-        writer_v2.create()  # Fails if called again, handle it...
         return None
 
     def build_batch_writer(
@@ -48,10 +52,12 @@ class IcebergTableFormat(TableFormat):
         output_mode: enums.OutputMode,
         partition_spec: PartitionSpec,
     ) -> types.Writer:
+        del output_mode
+        part_cols = [F.col(c) for c in partition_spec.columns]
         writer = (
             df
             .writeTo(table_identifier.full_name)
-            .partitionedBy(*partition_spec.columns)
+            .partitionedBy(*part_cols)
         )
         return writer
 
@@ -81,7 +87,6 @@ class IcebergTableFormat(TableFormat):
         # Add txnVersion equivalent
         # Add userMetadata equivalent
         return writer
-
 
     def configure_session(
         self,

@@ -41,6 +41,7 @@ class BatchTransformation(Transformation):
         # Build and configure the Writer
         writer = this_table.table_format.build_batch_writer(
             df=transformed_df,
+            table_identifier=this_table.table_identifier,
             output_mode=self.output_mode,
             partition_spec=this_table.partition_spec
         )
@@ -49,8 +50,9 @@ class BatchTransformation(Transformation):
             location=this_table.location,
             data_interval=data_interval
         )
-        assert isinstance(writer, DataFrameWriter)
-        return writer.save()
+        return self.start_writer(writer=writer, output_mode=self.output_mode)
+        # assert isinstance(writer, DataFrameWriter)
+        # return writer.save()
 
     def test_transformation(
         self,

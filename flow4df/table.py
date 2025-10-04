@@ -9,6 +9,7 @@ from types import ModuleType
 from typing import Any, Protocol, Callable
 from pyspark.sql import types as T
 from dataclasses import dataclass, field, fields
+from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql import DataFrameWriter, DataFrameWriterV2
@@ -16,6 +17,7 @@ from pyspark.sql.streaming.readwriter import DataStreamWriter
 
 import flow4df
 from flow4df import types, enums
+from flow4df import table_identifier
 from flow4df.table_format.table_format import TableFormat
 from flow4df.storage.storage import Storage
 from flow4df.table_stats import TableStats
@@ -97,6 +99,7 @@ class Table:
         self.table_format.init_table(
             spark=spark,
             location=stub_location,
+            table_identifier=self.table_identifier,
             table_schema=self.table_schema,
             partition_spec=self.partition_spec
         )
@@ -323,3 +326,5 @@ class Transformation(Protocol):
         elif isinstance(writer, DataFrameWriterV2):
             if output_mode == enums.OutputMode.append:
                 return writer.append()
+            elif output_mode == enums.OutputMode.overwrite:
+                return writer.overwrite(F.lit(True))

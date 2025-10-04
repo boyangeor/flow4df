@@ -40,6 +40,7 @@ class DeltaTableFormat(TableFormat):
         output_mode: enums.OutputMode,
         partition_spec: PartitionSpec,
     ) -> types.Writer:
+        del table_identifier
         writer = (
             df
             .write

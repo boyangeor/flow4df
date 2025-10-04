@@ -19,6 +19,7 @@ class TableFormat(Protocol):
     def build_batch_writer(
         self,
         df: DataFrame,
+        table_identifier: TableIdentifier,
         output_mode: enums.OutputMode,
         partition_spec: PartitionSpec
     ) -> types.Writer:
