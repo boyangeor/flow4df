@@ -18,11 +18,13 @@ classifiers = [
 ]
 
 dependencies = [
-    "pyspark~=3.5",
     "setuptools",
 ]
 
 [project.optional-dependencies]
+pyspark = [
+    "pyspark~=3.5",
+]
 delta = [
     "delta-spark==3.*"
 ]
