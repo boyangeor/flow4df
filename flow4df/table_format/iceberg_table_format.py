@@ -11,7 +11,7 @@ from pyspark.sql import types as T
 from pyspark.sql.types import LongType, StructType
 from pyspark.sql.streaming.readwriter import DataStreamWriter
 
-from flow4df import types, enums
+from flow4df import type_annotations, enums
 from flow4df.table_format.table_format import TableFormat
 from flow4df.table_format.table_format import TableStats
 from flow4df import DataInterval, PartitionSpec, TableIdentifier
@@ -51,7 +51,7 @@ class IcebergTableFormat(TableFormat):
         table_identifier: TableIdentifier,
         output_mode: enums.OutputMode,
         partition_spec: PartitionSpec,
-    ) -> types.Writer:
+    ) -> type_annotations.Writer:
         del output_mode
         part_cols = [F.col(c) for c in partition_spec.columns]
         writer = (
@@ -62,8 +62,8 @@ class IcebergTableFormat(TableFormat):
         return writer
 
     def configure_reader(
-        self, reader: types.Reader, location: str
-    ) -> types.Reader:
+        self, reader: type_annotations.Reader, location: str
+    ) -> type_annotations.Reader:
         return (
             reader
             .format(TABLE_FORMAT_NAME)
@@ -72,10 +72,10 @@ class IcebergTableFormat(TableFormat):
 
     def configure_writer(
         self,
-        writer: types.Writer,
+        writer: type_annotations.Writer,
         location: str,
         data_interval: DataInterval | None
-    ) -> types.Writer:
+    ) -> type_annotations.Writer:
         del data_interval
         if isinstance(writer, DataStreamWriter):
             return (

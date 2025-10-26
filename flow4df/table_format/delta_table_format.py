@@ -5,12 +5,13 @@ import operator
 import functools
 import datetime as dt
 from dataclasses import dataclass, field
-from pyspark.sql import SparkSession, DataFrame, Column, Window, Row
+from pyspark.sql import DataFrameWriter, SparkSession, DataFrame, Column
+from pyspark.sql import Window, Row
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 from pyspark.sql.types import LongType, StructType
 
-from flow4df import types, enums
+from flow4df import type_annotations, enums
 from flow4df.table_format.table_format import TableFormat
 from flow4df.table_format.table_format import TableStats
 from flow4df import DataInterval, PartitionSpec, TableIdentifier
@@ -39,7 +40,7 @@ class DeltaTableFormat(TableFormat):
         table_identifier: TableIdentifier,
         output_mode: enums.OutputMode,
         partition_spec: PartitionSpec,
-    ) -> types.Writer:
+    ) -> type_annotations.Writer:
         del table_identifier
         writer = (
             df
@@ -50,8 +51,8 @@ class DeltaTableFormat(TableFormat):
         return writer
 
     def configure_reader(
-        self, reader: types.Reader, location: str
-    ) -> types.Reader:
+        self, reader: type_annotations.Reader, location: str
+    ) -> type_annotations.Reader:
         return (
             reader
             .format(TABLE_FORMAT_NAME)
@@ -60,10 +61,10 @@ class DeltaTableFormat(TableFormat):
 
     def configure_writer(
         self,
-        writer: types.Writer,
+        writer: type_annotations.Writer,
         location: str,
         data_interval: DataInterval | None
-    ) -> types.Writer:
+    ) -> type_annotations.Writer:
         """Configures the given Writer and returns it.
 
         Sets:
@@ -74,6 +75,7 @@ class DeltaTableFormat(TableFormat):
             - .option('txnAppId', 'flow4df_run')
             - .option('txnVersion', <data_interval.start_unix_ts_seconds>)
         """
+        # assert isinstance(writer, DataFrameWriter)
         conf_writer = (
             writer
             .format(TABLE_FORMAT_NAME)
@@ -174,6 +176,7 @@ class DeltaTableFormat(TableFormat):
     def configure_session(
         self, spark: SparkSession, catalog_location: str
     ) -> None:
+        del spark, catalog_location
         return None
 
     def calculate_table_stats(
@@ -251,6 +254,7 @@ class DeltaTableFormat(TableFormat):
         location: str,
         table_identifier: TableIdentifier,
     ) -> bool:
+        del table_identifier
         from delta import DeltaTable
         as_delta_table = DeltaTable.forPath(sparkSession=spark, path=location)
         last_operation = as_delta_table.history(limit=1).collect()[0]

@@ -3,25 +3,29 @@ from pyspark.sql import types as T
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
 
-from flow4df.example.catalog1 import schema1
-
 table_schema = T.StructType([
     T.StructField('timestamp', T.TimestampType(), True),
     T.StructField('value', T.LongType(), True),
     T.StructField('planet', T.StringType(), True),
     T.StructField('event_date', T.DateType(), True),
-    T.StructField('galaxy', T.StringType(), True),
 ])
 
 
 def transform(
     spark: SparkSession, this_table: flow4df.Table
 ) -> DataFrame:
-    fct_raw_event_x = this_table.get_upstream_table('fct_raw_event_x')
-    fct_raw_event_x_df = fct_raw_event_x.as_streaming_df(spark)
-    return fct_raw_event_x_df.withColumns({
-        'galaxy': F.lit('Milky Way'),
+    del this_table
+    df = (
+        spark.readStream.format('rate-micro-batch')
+        .option('rowsPerBatch', 5)
+        .option('advanceMillisPerBatch', 3600 * 1000)
+        .load()
+    )
+    df = df.withColumns({
+        'planet': F.lit('Earth'),
+        'event_date': F.to_date('timestamp'),
     })
+    return df.repartition(1)
 
 
 transformation = flow4df.StructuredStreamingTransformation(
@@ -38,9 +42,7 @@ identifier = flow4df.TableIdentifier.from_module_name(__name__)
 table = flow4df.Table(
     table_schema=table_schema,
     table_identifier=identifier,
-    upstream_tables=[
-        schema1['fct_raw_event_x'],
-    ],
+    upstream_tables=[],
     transformation=transformation,
     table_format=flow4df.DeltaTableFormat(
         stateful_query_source=True, merge_schema=True,
@@ -48,5 +50,5 @@ table = flow4df.Table(
     storage=flow4df.LocalStorage(prefix='/tmp'),
     storage_stub=flow4df.LocalStorage(prefix='/tmp/stubs'),
     partition_spec=part_spec,
-    is_active=True,
+    is_active=False,
 )

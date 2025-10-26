@@ -16,8 +16,7 @@ from pyspark.sql import DataFrameWriter, DataFrameWriterV2
 from pyspark.sql.streaming.readwriter import DataStreamWriter
 
 import flow4df
-from flow4df import types, enums
-from flow4df import table_identifier
+from flow4df import type_annotations, enums
 from flow4df.table_format.table_format import TableFormat
 from flow4df.storage.storage import Storage
 from flow4df.table_stats import TableStats
@@ -106,7 +105,7 @@ class Table:
 
     def _as_df(
         self,
-        reader: types.Reader,
+        reader: type_annotations.Reader,
         location: str,
         options: dict[str, Any] | None = None
     ) -> DataFrame:
@@ -214,6 +213,7 @@ class Table:
 
     @fill_in_spark_session
     def is_initialized_only(self, spark: SparkSession | None = None) -> bool:
+        assert spark is not None
         return self.table_format.is_initialized_only(
             spark=spark,
             location=self.location,
@@ -257,14 +257,30 @@ class Table:
 
     @staticmethod
     def find_table_in_module(module: ModuleType) -> Table | None:
-        members = inspect.getmembers(
-            object=module, predicate=lambda e: isinstance(e, Table)
+        inferred_identifier = flow4df.TableIdentifier.from_module_name(
+            module_name=module.__name__
         )
+
+        def is_matching(member: Any) -> bool:
+            is_table = isinstance(member, Table)
+            if not is_table:
+                return False
+
+            member_identifier: flow4df.TableIdentifier = getattr(
+                member, 'table_identifier'
+            )
+            return member_identifier.is_semantically_equivalent(
+                catalog=inferred_identifier.catalog,
+                schema=inferred_identifier.schema,
+                name=inferred_identifier.name
+            )
+
+        members = inspect.getmembers(object=module, predicate=is_matching)
         if len(members) == 0:
             return None
 
         _m = f'More than 1 Table instance found in `{module.__name__}`'
-        assert len(members) == 1, _m
+        assert len(members) < 2, _m
         return members[0][1]
 
 
@@ -317,7 +333,7 @@ class Transformation(Protocol):
         raise
 
     def start_writer(
-        self, writer: types.Writer, output_mode: enums.OutputMode
+        self, writer: type_annotations.Writer, output_mode: enums.OutputMode
     ) -> StreamingQuery | None:
         if isinstance(writer, DataFrameWriter):
             return writer.save()

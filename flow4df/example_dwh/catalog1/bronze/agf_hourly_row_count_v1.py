@@ -7,7 +7,7 @@ from pyspark.sql import SparkSession, DataFrame
 from flow4df.transformation.incremental_batch_transformation import (
     IncrementalBatchTransformation
 )
-from flow4df.example.catalog1 import bronze_schema
+from flow4df.example_dwh import table_index
 
 
 def transform(
@@ -72,7 +72,11 @@ table = flow4df.Table(
     table_schema=table_schema,
     table_identifier=identifier,
     upstream_tables=[
-        bronze_schema.get_table('trf_raw_measurement'),
+        table_index.get_active_table(
+            catalog='catalog1',
+            schema='bronze',
+            name='trf_raw_measurement',
+        )
     ],
     transformation=transformation,
     table_format=flow4df.DeltaTableFormat(

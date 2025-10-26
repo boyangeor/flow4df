@@ -3,7 +3,7 @@ from typing import Protocol
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import StructType, DataType
 
-from flow4df import types, enums
+from flow4df import type_annotations, enums
 from flow4df import DataInterval, PartitionSpec, TableIdentifier
 from flow4df.table_stats import TableStats
 from flow4df.column_stats import ColumnStats
@@ -22,13 +22,13 @@ class TableFormat(Protocol):
         table_identifier: TableIdentifier,
         output_mode: enums.OutputMode,
         partition_spec: PartitionSpec
-    ) -> types.Writer:
+    ) -> type_annotations.Writer:
         """Builds the required Writer."""
         ...
 
     def configure_reader(
-        self, reader: types.Reader, location: str
-    ) -> types.Reader:
+        self, reader: type_annotations.Reader, location: str
+    ) -> type_annotations.Reader:
         """
         Configures the given Reader and returns it.
 
@@ -38,10 +38,10 @@ class TableFormat(Protocol):
         ...
 
     def configure_writer(
-        self, writer: types.Writer,
+        self, writer: type_annotations.Writer,
         location: str,
         data_interval: DataInterval | None,
-    ) -> types.Writer:
+    ) -> type_annotations.Writer:
         """Configures the given Writer and returns it.
 
         Most likely sets (not an exhaustive list):
