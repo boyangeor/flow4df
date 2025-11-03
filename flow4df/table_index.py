@@ -29,6 +29,7 @@ class TableIndex:
         _tables = [flow4df.Table.find_table_in_module(m) for m in modules]
         return [t for t in _tables if t is not None]
 
+    @staticmethod
     def raise_no_matching(
         identifier: tuple[str, ...], tables: list[flow4df.Table]
     ) -> None:
@@ -58,7 +59,7 @@ class TableIndex:
             if is_same:
                 return at
 
-        self.raise_no_matching(
+        TableIndex.raise_no_matching(
             identifier=(catalog, schema, name),
             tables=active_tables
         )
@@ -75,7 +76,7 @@ class TableIndex:
             if table.table_identifier == requested_identifier:
                 return table
 
-        self.raise_no_matching(
+        TableIndex.raise_no_matching(
             identifier=(catalog, schema, name, version),
             tables=all_tables
         )
