@@ -25,7 +25,7 @@ class TableIndex:
 
     @property  # Doesn't work if cached!
     def all_tables(self) -> list[flow4df.Table]:
-        modules = flow4df.tools.module.list_modules(package=self.package)
+        modules = flow4df.tools.module.list_modules(root_package=self.package)
         _tables = [flow4df.Table.find_table_in_module(m) for m in modules]
         return [t for t in _tables if t is not None]
 

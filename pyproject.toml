@@ -17,9 +17,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = [
-    "setuptools",
-]
+dependencies = []
 
 [project.optional-dependencies]
 pyspark = [
