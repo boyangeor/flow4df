@@ -80,7 +80,13 @@ table = flow4df.Table(
     ],
     transformation=transformation,
     table_format=flow4df.DeltaTableFormat(
-        stateful_query_source=False, merge_schema=True,
+        stateful_query_source=False,
+        merge_schema=True,
+        table_properties={
+            'delta.appendOnly': 'true',
+            'delta.dataSkippingNumIndexedCols': 42,
+            'delta.logRetentionDuration': 'INTERVAL 100 DAYS',
+        }
     ),
     storage=flow4df.LocalStorage(prefix='/tmp'),
     storage_stub=flow4df.LocalStorage(prefix='/tmp/stubs'),

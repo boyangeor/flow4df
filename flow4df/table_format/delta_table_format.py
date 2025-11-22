@@ -4,6 +4,7 @@ import logging
 import operator
 import functools
 import datetime as dt
+from typing import Literal, TypedDict
 from dataclasses import dataclass, field
 from pyspark.sql import DataFrameWriter, SparkSession, DataFrame, Column
 from pyspark.sql import Window, Row
@@ -21,6 +22,28 @@ log = logging.getLogger()
 TABLE_FORMAT_NAME = 'delta'
 
 
+bool_literal = Literal['true', 'false']
+# https://docs.delta.io/table-properties/
+DeltaTableProperties = TypedDict(
+    'DeltaTableProperties',
+    {
+        'delta.appendOnly': bool_literal,  # false
+        'delta.checkpoint.writeStatsAsJson': bool_literal,  # true
+        'delta.checkpoint.writeStatsAsStruct': bool_literal,
+        'delta.compatibility.symlinkFormatManifest.enabled': bool_literal,
+        'delta.dataSkippingNumIndexedCols': int,  # 32
+        'delta.deletedFileRetentionDuration': str,  # INTERVAL 1 WEEK
+        'delta.enableChangeDataFeed': bool_literal,  # false
+        'delta.logRetentionDuration': str,  # INTERVAL 30 DAYS
+        'delta.minReaderVersion': int,
+        'delta.minWriterVersion': int,
+        'delta.setTransactionRetentionDuration': str,
+        'delta.checkpointPolicy': str,  # classic
+    },
+    total=False,
+)
+
+
 @dataclass(frozen=True, kw_only=True)
 class Constraint:
     name: str
@@ -33,6 +56,7 @@ class DeltaTableFormat(TableFormat):
     merge_schema: bool = True
     idempotency_from_data_interval: bool = True
     constraints: list[Constraint] = field(default_factory=list)
+    table_properties: DeltaTableProperties = field(default_factory=dict)  # type: ignore
 
     def build_batch_writer(
         self,
@@ -125,9 +149,11 @@ class DeltaTableFormat(TableFormat):
             .partitionedBy(*partition_spec.columns)
         )
         for c in self.constraints:
-            builder = builder.property(
-                key=f'delta.constraints.{c.name}', value=c.expression
-            )
+            _key = f'delta.constraints.{c.name}'
+            builder = builder.property(key=_key, value=c.expression)
+
+        for prop_key, prop_value in self.table_properties.items():
+            builder = builder.property(key=prop_key, value=str(prop_value))
 
         builder.execute()
         return None
@@ -174,9 +200,12 @@ class DeltaTableFormat(TableFormat):
         return None
 
     def configure_session(
-        self, spark: SparkSession, catalog_location: str
+        self,
+        spark: SparkSession,
+        table_identifier: TableIdentifier,
+        catalog_location: str
     ) -> None:
-        del spark, catalog_location
+        del spark, catalog_location, table_identifier
         return None
 
     def calculate_table_stats(
@@ -335,43 +364,58 @@ class DeltaTableFormat(TableFormat):
         return log_snapshot_df
 
     @staticmethod
+    def add_part_struct(
+        log_snapshot_df: DataFrame,
+        partition_spec: PartitionSpec,
+        column_types: dict[str, T.DataType]
+    ) -> DataFrame:
+        _m = 'Table must have partitioning columns!'
+        assert partition_spec.column_count > 0, _m
+        pv_map = F.col('partitionValues')
+        part_struct = F.struct([
+            pv_map.getItem(c).cast(column_types[c]).alias(c)
+            for c in partition_spec.columns
+        ])
+        _is_null_conds = [
+            part_struct.getField(name).isNull()
+            for name in partition_spec.columns
+        ]
+        has_null_partitions = functools.reduce(operator.or_, _is_null_conds)
+        return log_snapshot_df.withColumns({
+            'part_struct': part_struct,
+            'has_null_partitions': has_null_partitions,
+        })
+
+    @staticmethod
     def add_partitioning_info(
         log_snapshot_df: DataFrame,
         partition_spec: PartitionSpec,
         column_types: dict[str, T.DataType]
     ) -> DataFrame:
-        pv_map = F.col('partitionValues')
-        pred_map = F.transform_values(
-            col=pv_map, f=lambda k, v: F.format_string('%s = "%s"', k, v)
+        log_snapshot_df = DeltaTableFormat.add_part_struct(
+            log_snapshot_df, partition_spec, column_types
         )
-        part_expression = F.array_join(
-            F.map_values(pred_map), delimiter=' AND '
-        )
-        part_struct = F.lit(None)
-        if partition_spec.column_count > 0:
-            part_struct = F.struct([
-                pv_map.getItem(c).cast(column_types[c]).alias(c)
-                for c in partition_spec.columns
-            ])
-
-        partition_spec.time_non_monotonic
+        part_struct = F.col('part_struct')
         non_increasing: list[Column] = [
             part_struct.getField(e)
             for e in partition_spec.time_non_monotonic
         ]
-        w1 = Window.partitionBy(*non_increasing).orderBy(part_struct)
+        w1 = Window.partitionBy(F.lit(True), *non_increasing).orderBy(
+            part_struct
+        )
         w2 = Window.partitionBy(part_struct).rowsBetween(
             Window.unboundedPreceding, Window.unboundedFollowing
         )
-        df = log_snapshot_df.withColumns({
-            'part_expression': part_expression,
-            'part_struct': part_struct,
-            'prev_mod_time': F.lag('modificationTime').over(w1),
-            'n_files': F.count('*').over(w2),
-        })
-        return df.withColumns({
-            'file_added_ts': F.timestamp_millis('modificationTime')
-        })
+        df = (
+            log_snapshot_df
+            .where(~F.col('has_null_partitions'))
+            .withColumns({
+                'prev_mod_time': F.lag('modificationTime').over(w1),
+                'n_files': F.count('*').over(w2),
+                'file_added_ts': F.timestamp_millis('modificationTime'),
+            })
+        )
+        return df
 
     @staticmethod
     def find_partition_to_compact(
@@ -393,14 +437,17 @@ class DeltaTableFormat(TableFormat):
             F.col('prev_mod_time') > F.col('modificationTime')
         ]
         predicate = functools.reduce(operator.or_, preds)
-        _pe = 'part_expression'
         part_to_compact = log_snapshot_df.where(predicate).select(
-            F.min_by(_pe, 'part_struct').alias(_pe)
-        ).collect()
+            F.min('part_struct').alias('part_struct')
+        ).collect()[0]['part_struct']
 
         unordered_partition = None
-        if len(part_to_compact) > 0:
-            unordered_partition = part_to_compact[0][_pe]
+        if part_to_compact is not None:
+            predicates = [
+                F.equal_null(F.col(k), F.lit(v))
+                for k, v in part_to_compact.asDict().items()
+            ]
+            unordered_partition = functools.reduce(operator.and_, predicates)
 
         return unordered_partition
 
@@ -421,7 +468,8 @@ class DeltaTableFormat(TableFormat):
             .mode('overwrite')
             .option('path', location)
             .option('dataChange', False)
-            .option('replaceWhere', partition_predicate)
+            .option('partitionOverwriteMode', 'dynamic')
+            # .option('replaceWhere', partition_predicate)
         )
         writer.save()
         return None
