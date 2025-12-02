@@ -1,8 +1,9 @@
 import operator
-from dataclasses import dataclass, field
+import functools
+from dataclasses import dataclass
 
 
-@dataclass(frozen=False, kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class PartitionSpec:
     """Defines physical (file) partitioning of a table.
 
@@ -29,10 +30,7 @@ class PartitionSpec:
         Columns with fixed set of possible values.
     time_monotonic_increasing : list of str
         Columns with infinite set of possible values that increase with time.
-    columns : list of str
-        `time_non_monotonic` + `time_monotonic_increasing` for easier access.
-    column_count : int
-         The number of columns, len(`columns`)
+    TODO:
 
 
     Examples
@@ -41,16 +39,23 @@ class PartitionSpec:
     >>> partition_spec = PartitionSpec(
     ...     time_non_monotonic=['country'],
     ...     time_monotonic_increasing=['event_year', 'event_date'])
-    >>> partition_spec.columns
+    >>> partition_spec.partition_columns
     ['country', 'event_year', 'event_date']
     """
     time_non_monotonic: list[str]
     time_monotonic_increasing: list[str]
-    columns: list[str] = field(default_factory=list, init=False, repr=True)
-    column_count: int = field(init=False, repr=True)
+    time_bucketing_column: str | None = None
 
-    def __post_init__(self) -> None:
-        self.columns = operator.add(
+    @functools.cached_property
+    def partition_columns(self) -> list[str]:
+        return operator.add(
             self.time_non_monotonic, self.time_monotonic_increasing,
         )
-        self.column_count = len(self.columns)
+
+    @functools.cached_property
+    def partition_by(self) -> list[str]:
+        _cols = list(self.partition_columns)
+        if self.time_bucketing_column is not None:
+            _cols.append('_time_bucket')
+
+        return _cols

@@ -24,7 +24,8 @@ pyspark = [
     "pyspark~=3.5",
 ]
 delta = [
-    "delta-spark==3.*"
+    "delta-spark==3.*",
+    "numpy>=1.21"
 ]
 dev = [
     "pytest>=7.4.3",

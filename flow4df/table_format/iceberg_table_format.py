@@ -35,7 +35,7 @@ class IcebergTableFormat(TableFormat):
         table_exists = spark.catalog.tableExists(table_identifier.full_name)
         if not table_exists:
             empty_df = spark.createDataFrame([], schema=table_schema)
-            part_cols = [F.col(c) for c in partition_spec.columns]
+            part_cols = [F.col(c) for c in partition_spec.partition_columns]
             writer_v2 = (
                 empty_df
                 .writeTo(table_identifier.full_name)
@@ -53,7 +53,7 @@ class IcebergTableFormat(TableFormat):
         partition_spec: PartitionSpec,
     ) -> type_annotations.Writer:
         del output_mode
-        part_cols = [F.col(c) for c in partition_spec.columns]
+        part_cols = [F.col(c) for c in partition_spec.partition_columns]
         writer = (
             df
             .writeTo(table_identifier.full_name)

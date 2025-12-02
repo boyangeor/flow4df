@@ -1,5 +1,6 @@
 from typing import Protocol, TypeAlias, Union
 from dataclasses import dataclass
+from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
 from pyspark.sql.streaming.readwriter import DataStreamWriter
 from pyspark.sql.streaming.query import StreamingQuery
@@ -36,6 +37,9 @@ class StructuredStreamingTransformation(Transformation):
         # Call the Transform to obtain the DataFrame
         df = self.transform(spark=spark, this_table=this_table)
 
+        if this_table.partition_spec.time_bucketing_column is not None:
+            df = df.withColumn('_time_bucket', F.lit(0))
+
         cp_location = this_table.storage.build_checkpoint_location(
             table_identifier=this_table.table_identifier,
             checkpoint_dir=self.checkpoint_dir
@@ -51,7 +55,7 @@ class StructuredStreamingTransformation(Transformation):
             .writeStream
             .outputMode(self.output_mode.name)
             .option('checkpointLocation', cp_location)
-            .partitionBy(*this_table.partition_spec.columns)
+            .partitionBy(*this_table.partition_spec.partition_by)
             .trigger(**_trigger)  # type: ignore
             .queryName(f'streaming_query_{table_id}')
         )

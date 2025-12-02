@@ -62,7 +62,8 @@ class Table:
 
     def __post_init__(self) -> None:
         flow4df.tools.schema.assert_columns_in_schema(
-            columns=self.partition_spec.columns, schema=self.table_schema
+            columns=self.partition_spec.partition_columns,
+            schema=self.table_schema
         )
 
     @functools.cached_property

@@ -1,5 +1,6 @@
 import re
 import json
+import math
 import logging
 import operator
 import functools
@@ -11,16 +12,17 @@ from pyspark.sql import Window, Row
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 from pyspark.sql.types import LongType, StructType
+from pyspark.ml.feature import QuantileDiscretizer
 
 from flow4df import type_annotations, enums
 from flow4df.table_format.table_format import TableFormat
 from flow4df.table_format.table_format import TableStats
 from flow4df import DataInterval, PartitionSpec, TableIdentifier
 from flow4df.column_stats import ColumnStats
+from flow4df.tools import sqlexpr
 
 log = logging.getLogger()
 TABLE_FORMAT_NAME = 'delta'
-
 
 bool_literal = Literal['true', 'false']
 # https://docs.delta.io/table-properties/
@@ -57,6 +59,7 @@ class DeltaTableFormat(TableFormat):
     idempotency_from_data_interval: bool = True
     constraints: list[Constraint] = field(default_factory=list)
     table_properties: DeltaTableProperties = field(default_factory=dict)  # type: ignore
+    target_rows_per_file: int | None = None
 
     def build_batch_writer(
         self,
@@ -70,7 +73,7 @@ class DeltaTableFormat(TableFormat):
             df
             .write
             .mode(output_mode.name)
-            .partitionBy(*partition_spec.columns)
+            .partitionBy(*partition_spec.partition_by)
         )
         return writer
 
@@ -146,8 +149,13 @@ class DeltaTableFormat(TableFormat):
             .createIfNotExists(sparkSession=spark)
             .location(adjusted_location)
             .addColumns(table_schema)
-            .partitionedBy(*partition_spec.columns)
+            .partitionedBy(*partition_spec.partition_by)
         )
+        _time_bucket_not_in_schema = '_time_bucket' not in table_schema.names
+        with_time_bucketing = partition_spec.time_bucketing_column is not None
+        if with_time_bucketing and _time_bucket_not_in_schema:
+            builder = builder.addColumn('_time_bucket', T.IntegerType())
+
         for c in self.constraints:
             _key = f'delta.constraints.{c.name}'
             builder = builder.property(key=_key, value=c.expression)
@@ -178,7 +186,8 @@ class DeltaTableFormat(TableFormat):
                 spark=spark,
                 location=location,
                 partition_spec=partition_spec,
-                column_types=column_types
+                column_types=column_types,
+                target_rows_per_file=self.target_rows_per_file,
             )
             if part_to_compact is None:
                 break
@@ -190,12 +199,21 @@ class DeltaTableFormat(TableFormat):
             if max_runtime_reached:
                 break
 
-            log.info(f'Compacting: {location}\n{part_to_compact}')
-            self.compact_partition(
-                spark=spark,
-                location=location,
-                partition_predicate=part_to_compact,
-            )
+            log.info(f'Compacting {location}: {part_to_compact}')
+            if partition_spec.time_bucketing_column is None:
+                self.compact_partition(
+                    spark=spark,
+                    location=location,
+                    partition_predicate=part_to_compact,
+                )
+            else:
+                self.compact_partition_with_bucketing(
+                    spark=spark,
+                    location=location,
+                    partition_predicate=part_to_compact,
+                    time_bucketing_column=partition_spec.time_bucketing_column,
+                    target_rows_per_file=self.target_rows_per_file,
+                )
 
         return None
 
@@ -361,7 +379,9 @@ class DeltaTableFormat(TableFormat):
             delta_log.snapshot().allFiles().toDF()  # type: ignore
         )
         log_snapshot_df = DataFrame(jvm_table_files, spark)
-        return log_snapshot_df
+        return log_snapshot_df.withColumn(
+            'file_added_ts', F.timestamp_millis('modificationTime')
+        )
 
     @staticmethod
     def add_part_struct(
@@ -370,20 +390,22 @@ class DeltaTableFormat(TableFormat):
         column_types: dict[str, T.DataType]
     ) -> DataFrame:
         _m = 'Table must have partitioning columns!'
-        assert partition_spec.column_count > 0, _m
+        assert len(partition_spec.partition_columns), _m
         pv_map = F.col('partitionValues')
         part_struct = F.struct([
             pv_map.getItem(c).cast(column_types[c]).alias(c)
-            for c in partition_spec.columns
+            for c in partition_spec.partition_columns
         ])
         _is_null_conds = [
             part_struct.getField(name).isNull()
-            for name in partition_spec.columns
+            for name in partition_spec.partition_columns
         ]
         has_null_partitions = functools.reduce(operator.or_, _is_null_conds)
+        file_row_count = F.get_json_object('stats', '$.numRecords')
         return log_snapshot_df.withColumns({
             'part_struct': part_struct,
             'has_null_partitions': has_null_partitions,
+            'row_count': file_row_count.cast(LongType()),
         })
 
     @staticmethod
@@ -408,11 +430,12 @@ class DeltaTableFormat(TableFormat):
         )
         df = (
             log_snapshot_df
+            # Must filter before the window functions!
             .where(~F.col('has_null_partitions'))
             .withColumns({
                 'prev_mod_time': F.lag('modificationTime').over(w1),
                 'n_files': F.count('*').over(w2),
-                'file_added_ts': F.timestamp_millis('modificationTime'),
+                'partition_row_count': F.sum('row_count').over(w2),
             })
         )
         return df
@@ -422,7 +445,8 @@ class DeltaTableFormat(TableFormat):
         spark: SparkSession,
         location: str,
         partition_spec: PartitionSpec,
-        column_types: dict[str, T.DataType]
+        column_types: dict[str, T.DataType],
+        target_rows_per_file: int | None,
     ) -> str | None:
         raw_log_snapshot_df = DeltaTableFormat.build_log_snapshot_df(
             spark=spark, location=location
@@ -432,8 +456,21 @@ class DeltaTableFormat(TableFormat):
             partition_spec=partition_spec,
             column_types=column_types
         )
+        target_file_count = F.lit(1)
+        if partition_spec.time_bucketing_column is not None:
+            _m = (
+                'Must set `target_rows_per_file` for PartitionSpec with '
+                '`time_bucketing_column`.'
+            )
+            assert target_rows_per_file is not None, _m
+            _count = operator.truediv(
+                F.col('partition_row_count'),
+                F.lit(target_rows_per_file)
+            )
+            target_file_count = F.ceil(_count).cast(LongType())
+
         preds = [
-            F.col('n_files') > F.lit(1),
+            F.col('n_files') > target_file_count,
             F.col('prev_mod_time') > F.col('modificationTime')
         ]
         predicate = functools.reduce(operator.or_, preds)
@@ -443,11 +480,7 @@ class DeltaTableFormat(TableFormat):
 
         unordered_partition = None
         if part_to_compact is not None:
-            predicates = [
-                F.equal_null(F.col(k), F.lit(v))
-                for k, v in part_to_compact.asDict().items()
-            ]
-            unordered_partition = functools.reduce(operator.and_, predicates)
+            unordered_partition = sqlexpr.row_to_sql_filter(part_to_compact)
 
         return unordered_partition
 
@@ -468,8 +501,62 @@ class DeltaTableFormat(TableFormat):
             .mode('overwrite')
             .option('path', location)
             .option('dataChange', False)
-            .option('partitionOverwriteMode', 'dynamic')
-            # .option('replaceWhere', partition_predicate)
+            # .option('partitionOverwriteMode', 'dynamic')
+            .option('replaceWhere', partition_predicate)
+        )
+        writer.save()
+        return None
+
+    @staticmethod
+    def compact_partition_with_bucketing(
+        spark: SparkSession,
+        location: str,
+        partition_predicate: str,
+        time_bucketing_column: str,
+        target_rows_per_file: int,
+    ) -> None:
+        _m = '`target_rows_per_file` must be positive!'
+        assert target_rows_per_file > 0, _m
+
+        as_data_frame = (
+            spark
+            .read
+            .format(TABLE_FORMAT_NAME)
+            .option('path', location)
+            .load()
+        )
+        part_df = (
+            as_data_frame
+            .where(partition_predicate)
+            .withColumn('_unix_ts', F.unix_seconds(time_bucketing_column))
+            .drop(F.col('_time_bucket'))
+        )
+        part_row_count = part_df.count()
+        bucket_count = math.ceil(part_row_count / target_rows_per_file)
+
+        bucketized_part_df = part_df.withColumn('_time_bucket', F.lit(0))
+        if bucket_count > 1:
+            qds = QuantileDiscretizer(
+                numBuckets=bucket_count,
+                inputCol='_unix_ts',
+                outputCol='_time_bucket'
+            )
+            qds_fitted = qds.fit(part_df)
+            bucketized_part_df = (
+                qds_fitted.transform(part_df)
+                .withColumn('_time_bucket', F.col('_time_bucket').cast('int'))
+            )
+
+        writer = (
+            bucketized_part_df
+            .drop(F.col('_unix_ts'))
+            .repartition(1)
+            .write
+            .format(TABLE_FORMAT_NAME)
+            .mode('overwrite')
+            .option('path', location)
+            .option('dataChange', False)
+            .option('replaceWhere', partition_predicate)
         )
         writer.save()
         return None
