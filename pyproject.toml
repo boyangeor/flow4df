@@ -32,7 +32,8 @@ dev = [
     "coverage>=7.13.0",
 ]
 doc = [
-    "sphinx>=9.0.4",
+    "sphinx==8.2.3",
+    "sphinx_rtd_theme==3.0.2",
 ]
 emacs = [
     "ipython",
