@@ -1,5 +1,6 @@
 import pytest
 import flow4df
+import datetime as dt
 from pyspark.sql import types as T
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
@@ -7,7 +8,7 @@ from pyspark.sql import SparkSession, DataFrame
 
 def build_table(temp_dir: str, table_name: str) -> flow4df.Table:
     table_schema = T.StructType([
-        T.StructField('timestamp', T.TimestampType(), True),
+        T.StructField('event_ts', T.TimestampType(), True),
         T.StructField('value', T.LongType(), True),
         T.StructField('event_date', T.DateType(), True)
     ])
@@ -20,8 +21,9 @@ def build_table(temp_dir: str, table_name: str) -> flow4df.Table:
             spark.readStream.format('rate-micro-batch')
             .option('rowsPerBatch', 5)
             .load()
+            .withColumnRenamed('timestamp', 'event_ts')
         )
-        df = df.withColumn('event_date', F.to_date('timestamp'))
+        df = df.withColumn('event_date', F.to_date('event_ts'))
         return df.repartition(1)
 
     transformation = flow4df.StructuredStreamingTransformation(
@@ -33,6 +35,7 @@ def build_table(temp_dir: str, table_name: str) -> flow4df.Table:
     part_spec = flow4df.PartitionSpec(
         time_non_monotonic=[],
         time_monotonic_increasing=['event_date'],
+        time_bucketing_column='event_ts'
     )
     table_identifier = flow4df.TableIdentifier(
         catalog='catalog1',
@@ -40,14 +43,30 @@ def build_table(temp_dir: str, table_name: str) -> flow4df.Table:
         name=table_name,
         version='1'
     )
+    delta_table_format = flow4df.DeltaTableFormat(
+        stateful_query_source=True,
+        merge_schema=True,
+        constraints=[
+            flow4df.Constraint(
+                name='time_is_recent',
+                expression='event_ts > "1900-01-01"',
+            ),
+            flow4df.Constraint(
+                name='value_is_not_negative',
+                expression='value > -1',
+            ),
+        ],
+        table_properties={
+            'delta.dataSkippingNumIndexedCols': 16,
+        },
+        target_rows_per_file=100,
+    )
     return flow4df.Table(
         table_schema=table_schema,
         table_identifier=table_identifier,
         upstream_tables=[],
         transformation=transformation,
-        table_format=flow4df.DeltaTableFormat(
-            merge_schema=True, stateful_query_source=True
-        ),
+        table_format=delta_table_format,
         storage=flow4df.LocalStorage(prefix=temp_dir),
         storage_stub=flow4df.LocalStorage(prefix=temp_dir),
         partition_spec=part_spec,
@@ -59,6 +78,9 @@ def build_table(temp_dir: str, table_name: str) -> flow4df.Table:
 def test_init_table(spark: SparkSession, temp_dir: str) -> None:
     table = build_table(temp_dir=temp_dir, table_name='init_table')
     table.init_table(spark=spark)
+
+    # Test is_initialized_only
+    assert table.is_initialized_only(spark=spark)
 
     # Read it
     df = table.as_batch_df(spark)
@@ -76,6 +98,16 @@ def test_delta_maintenance(spark: SparkSession, temp_dir: str) -> None:
         handle = table.run(spark, trigger={'availableNow': True})
         assert handle is not None
         handle.awaitTermination()
+
+    # Test the column stats
+    column_stats = table.get_column_stats(
+        column_name='event_ts', spark=spark
+    )
+    e1 = dt.datetime(1970, 1, 1, 0, 0, 0, tzinfo=dt.UTC)
+    e2 = dt.datetime(1970, 1, 1, 0, 0, 1, tzinfo=dt.UTC)
+    assert column_stats.min_value == e1
+    assert column_stats.max_value == e2
+    assert column_stats.null_count == 0
 
     stats_before = table.calculate_table_stats(spark)
     # Run the maintenance

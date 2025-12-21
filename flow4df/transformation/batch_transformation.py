@@ -1,6 +1,7 @@
 import datetime as dt
 from typing import Protocol
 from dataclasses import dataclass
+from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
 from pyspark.sql.streaming.query import StreamingQuery
 
@@ -35,12 +36,15 @@ class BatchTransformation(Transformation):
         _m = 'BatchTransformation MUST receive `data_interval`!'
         assert data_interval is not None, _m
 
-        transformed_df = self.transform(
+        df = self.transform(
             spark=spark, this_table=this_table, data_interval=data_interval
         )
+        if this_table.partition_spec.time_bucketing_column is not None:
+            df = df.withColumn('_time_bucket', F.lit(0))
+
         # Build and configure the Writer
         writer = this_table.table_format.build_batch_writer(
-            df=transformed_df,
+            df=df,
             table_identifier=this_table.table_identifier,
             output_mode=self.output_mode,
             partition_spec=this_table.partition_spec

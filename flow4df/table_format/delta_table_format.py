@@ -19,6 +19,7 @@ from flow4df.table_format.table_format import TableFormat
 from flow4df.table_format.table_format import TableStats
 from flow4df import DataInterval, PartitionSpec, TableIdentifier
 from flow4df.column_stats import ColumnStats
+from flow4df.constraint import Constraint
 from flow4df.tools import sqlexpr
 
 log = logging.getLogger()
@@ -44,12 +45,6 @@ DeltaTableProperties = TypedDict(
     },
     total=False,
 )
-
-
-@dataclass(frozen=True, kw_only=True)
-class Constraint:
-    name: str
-    expression: str
 
 
 @dataclass(frozen=True, kw_only=True)

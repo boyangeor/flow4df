@@ -45,14 +45,6 @@ class DataInterval:
         return asdict(self)
 
     @staticmethod
-    def from_json(json_str: str) -> DataInterval:
-        d = json.loads(json_str)
-        return DataInterval(
-            start=dt.datetime.fromisoformat(d['start']),
-            end=dt.datetime.fromisoformat(d['end']),
-        )
-
-    @staticmethod
     def _is_tz_aware(d: dt.datetime) -> bool:
         return (d.tzinfo is not None) and (d.tzinfo.utcoffset is not None)
 
@@ -86,8 +78,8 @@ class DataInterval:
     def _parse_iso_timestamp(iso_timestamp: str) -> dt.datetime:
         _ts = dt.datetime.fromisoformat(iso_timestamp)
         if not DataInterval._is_tz_aware(_ts):
-            _ts = _ts.replace(tzinfo=dt.UTC)
-
+            _m = f'Ambiguous timestamp `{iso_timestamp}`, include a timezone!'
+            raise ValueError(_m)
         return _ts
 
     @staticmethod

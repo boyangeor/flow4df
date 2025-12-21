@@ -28,11 +28,12 @@ delta = [
     "numpy>=1.21"
 ]
 dev = [
-    "pytest>=7.4.3",
+    "pytest>=9.0.2",
+    "coverage>=7.13.0",
 ]
-# doc = [
-#     "sphinx>=7.3.0",
-# ]
+doc = [
+    "sphinx>=9.0.4",
+]
 emacs = [
     "ipython",
     "pyright[nodejs]==1.1.382",

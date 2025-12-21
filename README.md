@@ -12,6 +12,20 @@ classDiagram
         +Storage storage_stub
         +PartitionSpec partition_spec
         +bool is_active
+
+	+init_table()
+	+init_table_stub()
+	+as_batch_df() DataFrame
+	+as_streaming_df() DataFrame
+	+get_upstream_table()
+	+run()
+	+run_table_maintenance()
+	+test_transformation()
+	+get_column_stats()
+	+is_initialized_only()
+	+calculate_table_stats()
+
+	+find_table_in_module()$
     }
     class TableIdentifier {
       +String catalog

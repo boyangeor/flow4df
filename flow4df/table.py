@@ -202,17 +202,6 @@ class Table:
         )
 
     @fill_in_spark_session
-    def get_last_batch_data_interval(
-        self, spark: SparkSession | None = None,
-    ) -> flow4df.DataInterval:
-        assert spark is not None
-        return self.table_format.get_last_batch_data_interval(
-            spark=spark,
-            location=self.location,
-            table_identifier=self.table_identifier
-        )
-
-    @fill_in_spark_session
     def is_initialized_only(self, spark: SparkSession | None = None) -> bool:
         assert spark is not None
         return self.table_format.is_initialized_only(
@@ -221,27 +210,8 @@ class Table:
             table_identifier=self.table_identifier
         )
 
-    @fill_in_spark_session
-    def build_next_data_interval(
-        self, spark: SparkSession | None = None,
-    ) -> flow4df.DataInterval:
-        return self.transformation.build_next_data_interval(
-            spark=spark, this_table=self
-        )
-
     def calculate_table_stats(self, spark: SparkSession) -> TableStats:
         return self.table_format.calculate_table_stats(spark, self.location)
-
-    def configure_session(self, spark: SparkSession) -> None:
-        catalog_location = self.storage.build_catalog_location(
-            self.table_identifier
-        )
-        self.table_format.configure_session(
-            spark=spark,
-            table_identifier=self.table_identifier,
-            catalog_location=catalog_location
-        )
-        return None
 
     def _build_stub_table(self) -> Table:
         table_fields = fields(Table)
