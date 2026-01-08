@@ -7,6 +7,7 @@ from flow4df.trigger import Trigger
 from flow4df.constraint import Constraint
 
 from flow4df.storage.local_storage import LocalStorage
+from flow4df.storage.s3_storage import S3Storage
 
 from flow4df.table_format.delta_table_format import DeltaTableFormat
 

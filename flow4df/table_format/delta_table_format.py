@@ -7,12 +7,11 @@ import functools
 import datetime as dt
 from typing import Literal, TypedDict
 from dataclasses import dataclass, field
-from pyspark.sql import DataFrameWriter, SparkSession, DataFrame, Column
+from pyspark.sql import SparkSession, DataFrame, Column
 from pyspark.sql import Window, Row
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 from pyspark.sql.types import LongType, StructType
-from pyspark.ml.feature import QuantileDiscretizer
 
 from flow4df import type_annotations, enums
 from flow4df.table_format.table_format import TableFormat
@@ -510,6 +509,8 @@ class DeltaTableFormat(TableFormat):
         time_bucketing_column: str,
         target_rows_per_file: int,
     ) -> None:
+        from pyspark.ml.feature import QuantileDiscretizer
+
         _m = '`target_rows_per_file` must be positive!'
         assert target_rows_per_file > 0, _m
 
