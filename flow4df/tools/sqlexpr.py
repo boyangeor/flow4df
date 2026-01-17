@@ -4,21 +4,6 @@ from numbers import Number
 from typing import Any
 import datetime as dt
 
-r = Row(event_year=2025, event_date=datetime.date(2025, 10, 31))
-r = Row(event_year=2025, event_date=datetime.date(2025, 10, 31), planet=None)
-r = Row(event_year=2025, event_date=datetime.date(2025, 10, 31), planet='Earth')
-r = Row(
-    event_year=2025,
-    event_date=datetime.datetime(2025, 10, 31, 1, 2, 10, tzinfo=datetime.UTC),
-    planet='Earth'
-)
-tz1 = datetime.timezone(datetime.timedelta(hours=3))
-r = Row(
-    event_year=2025,
-    event_date=datetime.datetime(2025, 10, 31, 1, 2, 10, tzinfo=tz1),
-    planet='Earth'
-)
-
 
 def sql_condition(column_name: str, value: Any) -> str:
     """TODO: only simple data types should be supported!"""
@@ -40,6 +25,3 @@ def row_to_sql_filter(row: Row) -> str:
         sql_condition(column_name=k, value=v) for k, v in row.asDict().items()
     ]
     return ' AND '.join(conditions)
-
-
-# row_to_sql_filter(r)

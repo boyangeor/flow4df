@@ -45,4 +45,5 @@ class S3Storage(Storage):
         return f'{location}/{checkpoint_dir}'
 
     def build_catalog_location(self, table_identifier: TableIdentifier) -> str:
+        del table_identifier
         return f'{self.s3_client}://{self.bucket_name}/{self.prefix}'
