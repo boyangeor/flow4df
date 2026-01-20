@@ -10,6 +10,7 @@ def main() -> None:
     )
     main_function = application_args.main
     main_function(application_args)
+    return None
 
 
 if __name__ == '__main__':

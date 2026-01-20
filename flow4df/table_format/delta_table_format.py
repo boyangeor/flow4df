@@ -41,6 +41,7 @@ DeltaTableProperties = TypedDict(
         'delta.minWriterVersion': int,
         'delta.setTransactionRetentionDuration': str,
         'delta.checkpointPolicy': str,  # classic
+        'delta.enableRowTracking': bool_literal,  # disabled by default
     },
     total=False,
 )
