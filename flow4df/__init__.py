@@ -19,3 +19,6 @@ from flow4df.transformation.structured_streaming import (
 from flow4df.transformation.batch_transformation import (
     BatchTransformation
 )
+from flow4df.transformation.foreachbatch_streaming import (
+    ForeachBatchStreamingTransformation
+)
