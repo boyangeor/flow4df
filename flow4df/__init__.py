@@ -22,3 +22,6 @@ from flow4df.transformation.batch_transformation import (
 from flow4df.transformation.foreachbatch_streaming import (
     ForeachBatchStreamingTransformation
 )
+from flow4df.transformation.generic_transformation import (
+    GenericTransformation
+)
