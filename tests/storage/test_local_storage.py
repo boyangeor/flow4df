@@ -10,8 +10,8 @@ location_tests = [
             name='fct_tableZ',
             version='1'
         ),
-        'file:///tmp/mydir/catalogX/schemaY/fct_tableZ_v1',
-        'file:///tmp/mydir/catalogX/schemaY/fct_tableZ_v1/_checkpoint',
+        '/tmp/mydir/catalogX/schemaY/fct_tableZ_v1',
+        '/tmp/mydir/catalogX/schemaY/fct_tableZ_v1/_checkpoint',
     ),
     (
         TableIdentifier(
@@ -20,8 +20,8 @@ location_tests = [
             name='dim_city',
             version='2'
         ),
-        'file:///tmp/mydir/my_catalog/my_schema/dim_city_v2',
-        'file:///tmp/mydir/my_catalog/my_schema/dim_city_v2/_checkpoint',
+        '/tmp/mydir/my_catalog/my_schema/dim_city_v2',
+        '/tmp/mydir/my_catalog/my_schema/dim_city_v2/_checkpoint',
     ),
 ]
 
@@ -47,7 +47,7 @@ def test_custom_cp_location() -> None:
         version='1'
     )
     expected = (
-        'file:///tmp/mydir/catalogX/schemaY/fct_tableZ_v1/_custom_checkpoint'
+        '/tmp/mydir/catalogX/schemaY/fct_tableZ_v1/_custom_checkpoint'
     )
     actual = storage.build_checkpoint_location(
         table_identifier=identifier,
@@ -64,7 +64,7 @@ def test_build_catalog_location() -> None:
         name='fct_tableZ',
         version='1'
     )
-    expected = 'file:///tmp/mydir/catalogX'
+    expected = '/tmp/mydir/catalogX'
     actual = storage.build_catalog_location(identifier)
     assert actual == expected
 
@@ -77,7 +77,7 @@ def test_build_location_with_suffix() -> None:
         name='trf_raw_measurement',
         version='1',
     )
-    expected = 'file:///tmp/catalog1/bronze/trf_raw_measurement_v1.delta'
+    expected = '/tmp/catalog1/bronze/trf_raw_measurement_v1.delta'
     actual = storage.build_location(
         table_identifier=identifier,
         table_suffix='delta',

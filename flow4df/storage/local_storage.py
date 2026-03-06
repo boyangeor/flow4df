@@ -35,7 +35,7 @@ class LocalStorage(Storage):
             table_identifier.schema,
             table_component
         )
-        return path.as_uri()
+        return path.as_posix()
 
     def build_checkpoint_location(
         self,
@@ -53,8 +53,8 @@ class LocalStorage(Storage):
             table_component,
             checkpoint_dir
         )
-        return path.as_uri()
+        return path.as_posix()
 
     def build_catalog_location(self, table_identifier: TableIdentifier) -> str:
         path = Path(self.prefix, table_identifier.catalog)
-        return path.as_uri()
+        return path.as_posix()
