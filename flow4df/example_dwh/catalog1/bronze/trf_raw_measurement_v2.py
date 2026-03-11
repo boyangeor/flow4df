@@ -39,6 +39,20 @@ part_spec = flow4df.PartitionSpec(
     time_monotonic_increasing=['event_date'],
 )
 identifier = flow4df.TableIdentifier.from_module_name(__name__)
+
+
+def test1(spark: SparkSession, table: flow4df.Table) -> None:
+    assert 10 == 10
+
+
+def test2(spark: SparkSession, table: flow4df.Table) -> None:
+    assert 10 == 20
+
+
+def test3(spark: SparkSession, table: flow4df.Table) -> None:
+    assert 10 == 20
+
+
 table = flow4df.Table(
     table_schema=table_schema,
     table_identifier=identifier,
@@ -51,4 +65,5 @@ table = flow4df.Table(
     storage_stub=flow4df.LocalStorage(prefix='/tmp/stubs'),
     partition_spec=part_spec,
     is_active=False,
+    integration_tests=[test1, test2, test3]
 )

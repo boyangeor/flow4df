@@ -2,6 +2,7 @@ from __future__ import annotations
 import inspect
 import difflib
 import logging
+import unittest
 import functools
 import datetime as dt
 from abc import abstractmethod
@@ -23,6 +24,10 @@ from flow4df.table_stats import TableStats
 from flow4df.column_stats import ColumnStats
 
 log = logging.getLogger(__name__)
+list_field_args = {
+    'default_factory': list,
+    'repr': False
+}
 
 
 def fill_in_spark_session(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -48,6 +53,13 @@ def fill_in_spark_session(func: Callable[..., Any]) -> Callable[..., Any]:
     return _wrapper
 
 
+class IntegrationTest(Protocol):
+    def __call__(
+        self, spark: SparkSession, table: Table,
+    ) -> None:
+        ...
+
+
 @dataclass(frozen=False, kw_only=True)
 class Table:
     table_schema: T.StructType = field(repr=False)
@@ -59,6 +71,7 @@ class Table:
     storage_stub: Storage
     partition_spec: flow4df.PartitionSpec
     is_active: bool
+    integration_tests: list[IntegrationTest] = field(**list_field_args)
 
     def __post_init__(self) -> None:
         flow4df.tools.schema.assert_columns_in_schema(
@@ -253,6 +266,27 @@ class Table:
         _m = f'More than 1 Table instance found in `{module.__name__}`'
         assert len(members) < 2, _m
         return members[0][1]
+
+    def run_integration_tests(
+        self, spark: SparkSession
+    ) -> unittest.TestResult:
+        test_functions = {
+            f.__name__: functools.partial( # type: ignore
+                f, spark=spark, table=self
+            )
+            for f in self.integration_tests
+        }
+
+        class TestIntegration(unittest.TestCase):
+            def test_integration_tests(self):
+                for fname, tf in test_functions.items():
+                    with self.subTest(msg=f'Function: {fname}'):
+                        tf()
+
+        loader = unittest.TestLoader()
+        suite = loader.loadTestsFromTestCase(testCaseClass=TestIntegration)
+        runner = unittest.TextTestRunner()
+        return runner.run(suite)
 
 
 @dataclass(frozen=False, kw_only=True)
