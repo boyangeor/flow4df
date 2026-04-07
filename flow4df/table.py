@@ -24,10 +24,7 @@ from flow4df.table_stats import TableStats
 from flow4df.column_stats import ColumnStats
 
 log = logging.getLogger(__name__)
-list_field_args = {
-    'default_factory': list,
-    'repr': False
-}
+empty_list_field = field(default_factory=list, repr=False)
 
 
 def fill_in_spark_session(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -71,7 +68,7 @@ class Table:
     storage_stub: Storage
     partition_spec: flow4df.PartitionSpec
     is_active: bool
-    integration_tests: list[IntegrationTest] = field(**list_field_args)
+    integration_tests: list[IntegrationTest] = empty_list_field
 
     def __post_init__(self) -> None:
         flow4df.tools.schema.assert_columns_in_schema(
