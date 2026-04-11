@@ -405,8 +405,10 @@ class DeltaTableFormat(TableFormat):
             part_struct.getField(e)
             for e in partition_spec.time_non_monotonic
         ]
-        w1 = Window.partitionBy(F.lit(True), *non_increasing).orderBy(
-            part_struct
+        w1 = (
+            Window
+            .partitionBy(F.lit(True).alias('dummy'), *non_increasing)
+            .orderBy(part_struct)
         )
         w2 = Window.partitionBy(part_struct).rowsBetween(
             Window.unboundedPreceding, Window.unboundedFollowing
