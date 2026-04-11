@@ -224,19 +224,7 @@ class DeltaTableFormat(TableFormat):
     def calculate_table_stats(
         self, spark: SparkSession, location: str
     ) -> TableStats:
-        raw_log_snapshot = DeltaTableFormat.build_log_snapshot_df(
-            spark=spark, location=location
-        )
-        file_row_count = F.get_json_object('stats', '$.numRecords')
-        size_gib = F.sum('size') / F.lit(1_073_741_824)
-        agg_cols = [
-            F.count('*').alias('file_count'),
-            F.sum(file_row_count.cast(LongType())).alias('row_count'),
-            size_gib.alias('size_gib'),
-        ]
-        stats_df = raw_log_snapshot.select(agg_cols)
-        stats_row = stats_df.collect()[0]
-        return TableStats(**stats_row.asDict())
+        return DeltaTableFormat.summarize_table(spark=spark, location=location)
 
     def get_column_stats(
         self,
@@ -557,3 +545,19 @@ class DeltaTableFormat(TableFormat):
         )
         writer.save()
         return None
+
+    @staticmethod
+    def summarize_table(spark: SparkSession, location: str) -> TableStats:
+        raw_log_snapshot = DeltaTableFormat.build_log_snapshot_df(
+            spark=spark, location=location
+        )
+        file_row_count = F.get_json_object('stats', '$.numRecords')
+        size_gib = F.sum('size') / F.lit(1_073_741_824)
+        agg_cols = [
+            F.count('*').alias('file_count'),
+            F.sum(file_row_count.cast(LongType())).alias('row_count'),
+            size_gib.alias('size_gib'),
+        ]
+        stats_df = raw_log_snapshot.select(agg_cols)
+        stats_row = stats_df.collect()[0]
+        return TableStats(**stats_row.asDict())
