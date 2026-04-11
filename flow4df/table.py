@@ -7,14 +7,14 @@ import functools
 import datetime as dt
 from abc import abstractmethod
 from types import ModuleType
-from typing import Any, Protocol, Callable
-from pyspark.sql import types as T
+from typing import Any, Protocol, Callable, TypeVar, ParamSpec
 from dataclasses import dataclass, field, fields
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql import DataFrameWriter, DataFrameWriterV2
 from pyspark.sql.streaming.readwriter import DataStreamWriter
+from pyspark.sql.types import StructType, DataType
 
 import flow4df
 from flow4df import type_annotations, enums
@@ -23,14 +23,16 @@ from flow4df.storage.storage import Storage
 from flow4df.table_stats import TableStats
 from flow4df.column_stats import ColumnStats
 
+T = TypeVar('T')
+P = ParamSpec('P')
 log = logging.getLogger(__name__)
 empty_list_field = field(default_factory=list, repr=False)
 
 
-def fill_in_spark_session(func: Callable[..., Any]) -> Callable[..., Any]:
+def fill_in_spark_session(func: Callable[P, T]) -> Callable[P, T]:
 
     @functools.wraps(func)
-    def _wrapper(*args, **kwargs) -> Any:
+    def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         no_spark_in_args = len(args) < 2
         no_spark_in_kwargs = kwargs.get('spark') is None
         if no_spark_in_args and no_spark_in_kwargs:
@@ -59,7 +61,7 @@ class IntegrationTest(Protocol):
 
 @dataclass(frozen=False, kw_only=True)
 class Table:
-    table_schema: T.StructType = field(repr=False)
+    table_schema: StructType = field(repr=False)
     table_identifier: flow4df.TableIdentifier
     upstream_tables: list[Table] = field(default_factory=list, repr=False)
     transformation: Transformation
@@ -81,7 +83,7 @@ class Table:
         return self.storage.build_location(self.table_identifier)
 
     @functools.cached_property
-    def column_types(self) -> dict[str, T.DataType]:
+    def column_types(self) -> dict[str, DataType]:
         """<column_name>:<column_type> mapping."""
         return {
             e.name: e.dataType for e in self.table_schema.fields
