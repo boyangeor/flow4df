@@ -270,7 +270,7 @@ class Table:
         self, spark: SparkSession
     ) -> unittest.TestResult:
         test_functions = {
-            f.__name__: functools.partial( # type: ignore
+            f.__name__: functools.partial(  # type: ignore
                 f, spark=spark, table=self
             )
             for f in self.integration_tests
@@ -286,6 +286,12 @@ class Table:
         suite = loader.loadTestsFromTestCase(testCaseClass=TestIntegration)
         runner = unittest.TextTestRunner()
         return runner.run(suite)
+
+    @fill_in_spark_session
+    def print_schema(self, spark: SparkSession) -> None:
+        """Use DataFrame.printSchema() to print the Table schema."""
+        empty_df = spark.createDataFrame(data=[], schema=self.table_schema)
+        empty_df.printSchema()
 
 
 @dataclass(frozen=False, kw_only=True)
