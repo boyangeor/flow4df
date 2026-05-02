@@ -56,7 +56,8 @@ def test3(spark: SparkSession, table: flow4df.Table) -> None:
 table = flow4df.Table(
     table_schema=table_schema,
     table_identifier=identifier,
-    upstream_tables=[],
+    upstream_table_identifiers=[],
+    table_index=None,
     transformation=transformation,
     table_format=flow4df.DeltaTableFormat(
         stateful_query_source=True, merge_schema=True,

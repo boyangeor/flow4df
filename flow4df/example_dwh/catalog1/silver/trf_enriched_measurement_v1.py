@@ -34,22 +34,18 @@ table_schema = T.StructType([
     T.StructField('event_date', T.DateType(), True),
     T.StructField('galaxy', T.StringType(), True),
 ])
-upstream_table = table_index.get_active_table(
-    catalog='catalog1',
-    schema='bronze',
-    name='trf_raw_measurement',
-)
+
 table = flow4df.Table(
     table_schema=table_schema,
     table_identifier=identifier,
-    upstream_tables=[
-        # active_tables.get_table(
-        #     catalog='catalog1',
-        #     schema='bronze',
-        #     name='trf_raw_measurement',
-        # )
-        upstream_table
+    upstream_table_identifiers=[
+        flow4df.TableIdentifier(
+            catalog='catalog1',
+            schema='bronze',
+            name='trf_raw_measurement',
+        )
     ],
+    table_index=table_index,
     transformation=transformation,
     table_format=flow4df.DeltaTableFormat(
         stateful_query_source=True, merge_schema=True,

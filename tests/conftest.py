@@ -78,7 +78,8 @@ def example_table_1():
     return Table(
         table_schema=table_schema,
         table_identifier=identifier,
-        upstream_tables=[],
+        upstream_table_identifiers=[],
+        table_index=None,
         transformation=transformation,
         table_format=table_format,
         storage=LocalStorage(prefix='/tmp'),

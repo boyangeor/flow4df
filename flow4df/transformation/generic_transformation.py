@@ -31,7 +31,7 @@ class GenericTransformation(Transformation):
     def test_transformation(
         self,
         spark: SparkSession,
-        this_table: flow4df.Table,
+        unit_test_table: flow4df.Table,
         trigger: flow4df.Trigger | None = None,
         data_interval: flow4df.DataInterval | None = None,
     ) -> None:

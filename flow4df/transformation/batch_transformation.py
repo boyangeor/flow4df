@@ -61,7 +61,7 @@ class BatchTransformation(Transformation):
     def test_transformation(
         self,
         spark: SparkSession,
-        this_table: flow4df.Table,
+        unit_test_table: flow4df.Table,
         trigger: flow4df.Trigger | None = None,
         data_interval: flow4df.DataInterval | None = None
     ) -> None:
@@ -75,12 +75,14 @@ class BatchTransformation(Transformation):
         assert data_interval is not None, _m
 
         transformed_df = self.transform(
-            spark=spark, this_table=this_table, data_interval=data_interval
+            spark=spark,
+            this_table=unit_test_table,
+            data_interval=data_interval
         )
         flow4df.tools.schema.assert_schemas_equivalent(
             spark=spark,
             actual=transformed_df.schema,
-            expected=this_table.table_schema,
+            expected=unit_test_table.table_schema,
         )
         return None
 

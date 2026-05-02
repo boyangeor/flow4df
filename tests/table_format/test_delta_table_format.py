@@ -64,7 +64,8 @@ def build_table(temp_dir: str, table_name: str) -> flow4df.Table:
     return flow4df.Table(
         table_schema=table_schema,
         table_identifier=table_identifier,
-        upstream_tables=[],
+        upstream_table_identifiers=[],
+        table_index=None,
         transformation=transformation,
         table_format=delta_table_format,
         storage=flow4df.LocalStorage(prefix=temp_dir),

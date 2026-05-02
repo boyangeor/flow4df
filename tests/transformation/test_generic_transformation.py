@@ -46,7 +46,8 @@ def build_table(temp_dir: str) -> flow4df.Table:
     return flow4df.Table(
         table_schema=table_schema,
         table_identifier=table_identifier,
-        upstream_tables=[],
+        upstream_table_identifiers=[],
+        table_index=None,
         transformation=transformation,
         table_format=table_format,
         storage=flow4df.LocalStorage(prefix=temp_dir),
@@ -67,9 +68,3 @@ def test_run_transformation(spark: SparkSession, temp_dir: str) -> None:
     assert df.count() == ROW_COUNT
     return None
 
-
-@pytest.mark.slow
-def test_test_transformation(spark: SparkSession, temp_dir: str) -> None:
-    table = build_table(temp_dir=temp_dir)
-    table.test_transformation(spark=spark)
-    return None

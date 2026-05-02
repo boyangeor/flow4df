@@ -5,10 +5,11 @@ import logging
 import unittest
 import functools
 import datetime as dt
+from collections import Counter
 from abc import abstractmethod
 from types import ModuleType
-from typing import Any, Protocol, Callable, TypeVar, ParamSpec
-from dataclasses import dataclass, field, fields
+from typing import Any, Protocol, Callable, TypeVar, ParamSpec, NoReturn
+from dataclasses import dataclass, field, replace
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
@@ -63,7 +64,8 @@ class IntegrationTest(Protocol):
 class Table:
     table_schema: StructType = field(repr=False)
     table_identifier: flow4df.TableIdentifier
-    upstream_tables: list[Table] = field(default_factory=list, repr=False)
+    upstream_table_identifiers: list[flow4df.TableIdentifier]
+    table_index: TableIndex | None
     transformation: Transformation
     table_format: TableFormat
     storage: Storage
@@ -77,6 +79,9 @@ class Table:
             columns=self.partition_spec.partition_columns,
             schema=self.table_schema
         )
+        if len(self.upstream_table_identifiers) > 0:
+            _m = 'Table with upstream table dependencies must have TableIndex!'
+            assert self.table_index is not None, _m
 
     @functools.cached_property
     def location(self) -> str:
@@ -88,6 +93,27 @@ class Table:
         return {
             e.name: e.dataType for e in self.table_schema.fields
         }
+
+    @functools.cached_property
+    def upstream_tables(self) -> list[Table]:
+        if self.table_index is None:
+            return []
+
+        tables_ = []
+        for ti in self.upstream_table_identifiers:
+            if ti.version is None:
+                table = self.table_index.get_active_table(
+                    catalog=ti.catalog, schema=ti.schema, name=ti.name
+                )
+            else:
+                table = self.table_index.get_table(
+                    catalog=ti.catalog, schema=ti.schema, name=ti.name,
+                    version=ti.version
+                )
+
+            tables_.append(table)
+
+        return tables_
 
     @functools.cached_property
     def _upstream_tables_dict(self) -> dict[str, Table]:
@@ -192,10 +218,16 @@ class Table:
     def test_transformation(
         self,
         spark: SparkSession,
+        stub_table_index: TableIndex,
         data_interval: flow4df.DataInterval | None = None,
     ) -> None:
+        unit_test_table = replace(
+            self, table_index=stub_table_index, storage=self.storage_stub
+        )
         self.transformation.test_transformation(
-            spark=spark, this_table=self, data_interval=data_interval
+            spark=spark,
+            unit_test_table=unit_test_table,
+            data_interval=data_interval
         )
 
     @fill_in_spark_session
@@ -224,19 +256,6 @@ class Table:
 
     def calculate_table_stats(self, spark: SparkSession) -> TableStats:
         return self.table_format.calculate_table_stats(spark, self.location)
-
-    def _build_stub_table(self) -> Table:
-        table_fields = fields(Table)
-        non_storage_fields = [
-            field.name for field in table_fields
-            if field.name not in {'storage'}
-        ]
-        init_args = {
-            field: getattr(self, field) for field in non_storage_fields
-        }
-        # Replace the `storage` with `storage_stub`
-        init_args['storage'] = self.storage_stub
-        return Table(**init_args)
 
     @staticmethod
     def find_table_in_module(module: ModuleType) -> Table | None:
@@ -294,27 +313,6 @@ class Table:
         empty_df.printSchema()
 
 
-@dataclass(frozen=False, kw_only=True)
-class UnitTestTable(Table):
-    """TODO."""
-
-    @staticmethod
-    def from_table(table: Table) -> UnitTestTable:
-        table_fields = fields(Table)
-        non_storage_fields = [
-            field.name for field in table_fields
-            if field.name not in {'storage', 'upstream_tables'}
-        ]
-        init_args = {
-            field: getattr(table, field) for field in non_storage_fields
-        }
-        init_args['storage'] = table.storage_stub
-        init_args['upstream_tables'] = [
-            ut._build_stub_table() for ut in table.upstream_tables
-        ]
-        return UnitTestTable(**init_args)
-
-
 class Transformation(Protocol):
 
     @abstractmethod
@@ -331,7 +329,7 @@ class Transformation(Protocol):
     def test_transformation(
         self,
         spark: SparkSession,
-        this_table: Table,
+        unit_test_table: Table,
         trigger: flow4df.Trigger | None = None,
         data_interval: flow4df.DataInterval | None = None,
     ) -> None:
@@ -354,3 +352,89 @@ class Transformation(Protocol):
                 return writer.append()
             elif output_mode == enums.OutputMode.overwrite:
                 return writer.overwrite(F.lit(True))
+
+
+@dataclass(frozen=True, kw_only=True)
+class TableIndex:
+    """TODO doc."""
+    package: str
+    stub: bool = False
+
+    @staticmethod
+    def assert_single_active_table(active_tables: list[flow4df.Table]) -> None:
+        versionless_names = [
+            t.table_identifier.versionless_name for t in active_tables
+        ]
+        counter = Counter(versionless_names)
+        with_multiple_versions = [
+            name for name, count in counter.items() if count > 1
+        ]
+        _m = f'Multiple versions for: {with_multiple_versions} !'
+        assert len(with_multiple_versions) == 0, _m
+        return None
+
+    @property  # Doesn't work if cached!
+    def all_tables(self) -> list[flow4df.Table]:
+        modules = flow4df.tools.module.list_modules(root_package=self.package)
+        attempted_tables = [
+            flow4df.Table.find_table_in_module(m) for m in modules
+        ]
+        tables = [t for t in attempted_tables if t is not None]
+        if self.stub:
+            tables = [
+                replace(t, storage=t.storage_stub) for t in tables
+            ]
+
+        return tables
+
+    @staticmethod
+    def raise_no_matching(
+        identifier: tuple[str, ...], tables: list[flow4df.Table]
+    ) -> NoReturn:
+        possibilities = [
+            t.table_identifier.versionless_name for t in tables
+        ]
+        table_name = '.'.join(identifier)
+        closest = difflib.get_close_matches(
+            word=table_name, possibilities=possibilities, n=3, cutoff=0
+        )
+        _m = (
+            f'Cannot find table `{table_name}`. '
+            f'Did you mean one of {closest}?'
+        )
+        raise ValueError(_m)
+
+    @functools.cache
+    def get_active_table(
+        self, catalog: str, schema: str, name: str
+    ) -> Table | NoReturn:
+        active_tables = [t for t in self.all_tables if t.is_active]
+        TableIndex.assert_single_active_table(active_tables)
+        for at in active_tables:
+            is_same = at.table_identifier.is_semantically_equivalent(
+                catalog=catalog, schema=schema, name=name,
+            )
+            if is_same:
+                return at
+
+        TableIndex.raise_no_matching(
+            identifier=(catalog, schema, name),
+            tables=active_tables
+        )
+
+    @functools.cache
+    def get_table(
+        self, catalog: str, schema: str, name: str, version: str
+    ) -> Table | NoReturn:
+        all_tables = self.all_tables
+        requested_identifier = flow4df.TableIdentifier(
+            catalog=catalog, schema=schema, name=name, version=version
+        )
+        for table in self.all_tables:
+            if table.table_identifier == requested_identifier:
+                return table
+
+        TableIndex.raise_no_matching(
+            identifier=(catalog, schema, name, version),
+            tables=all_tables
+        )

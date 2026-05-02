@@ -15,7 +15,7 @@ class TableIdentifier:
     catalog: str
     schema: str
     name: str
-    version: str
+    version: str | None = None
 
     @staticmethod
     def from_module_name(module_name: str) -> TableIdentifier:

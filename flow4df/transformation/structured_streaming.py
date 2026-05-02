@@ -68,7 +68,7 @@ class StructuredStreamingTransformation(Transformation):
     def test_transformation(
         self,
         spark: SparkSession,
-        this_table: flow4df.Table,
+        unit_test_table: flow4df.Table,
         trigger: flow4df.Trigger | None = None,
         data_interval: flow4df.DataInterval | None = None
     ) -> None:
@@ -80,9 +80,11 @@ class StructuredStreamingTransformation(Transformation):
         _m = 'StructuredStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
 
-        tdf = self.transform(spark=spark, this_table=this_table)
+        tdf = self.transform(spark=spark, this_table=unit_test_table)
         flow4df.tools.schema.assert_schemas_equivalent(
-            spark=spark, actual=tdf.schema, expected=this_table.table_schema,
+            spark=spark,
+            actual=tdf.schema,
+            expected=unit_test_table.table_schema,
         )
         return None
 

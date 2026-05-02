@@ -5,7 +5,7 @@ from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql.streaming.readwriter import DataStreamWriter
 
 import flow4df
-from flow4df.table import Transformation, UnitTestTable
+from flow4df.table import Transformation
 
 
 class StreamingTransform(Protocol):
@@ -77,7 +77,7 @@ class ForeachBatchStreamingTransformation(Transformation):
     def test_transformation(
         self,
         spark: SparkSession,
-        this_table: flow4df.Table,
+        unit_test_table: flow4df.Table,
         trigger: flow4df.Trigger | None = None,
         data_interval: flow4df.DataInterval | None = None
     ) -> None:
@@ -85,10 +85,9 @@ class ForeachBatchStreamingTransformation(Transformation):
         _m = 'ForeachBatchStreaming should not receive `data_interval`!'
         assert data_interval is None, _m
 
-        ut_table = UnitTestTable.from_table(this_table)
         query = self.run_transformation(
             spark=spark,
-            this_table=ut_table,
+            this_table=unit_test_table,
             trigger={'availableNow': True},
             data_interval=None
         )
