@@ -7,14 +7,14 @@ from collections.abc import Callable
 from flow4df import Table
 from flow4df.table import TableIndex
 
-list_field_args = {'default_factory': list, 'repr': False}
+empty_list_field = field(default_factory=list, repr=False)
 
 
 @dataclass(frozen=False, kw_only=True)
 class ApplicationArguments:
     main: Callable[..., None]
-    active_tables: list[Table] = field(**list_field_args)
-    tables: list[Table] = field(**list_field_args)
+    active_tables: list[Table] = empty_list_field
+    tables: list[Table] = empty_list_field
 
     def as_dict(self) -> dict:
         module = inspect.getmodule(self.main)
