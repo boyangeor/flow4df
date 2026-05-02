@@ -5,7 +5,7 @@ import importlib
 from dataclasses import dataclass, field
 from collections.abc import Callable
 from flow4df import Table
-from flow4df.table_index import TableIndex
+from flow4df.table import TableIndex
 
 list_field_args = {'default_factory': list, 'repr': False}
 
