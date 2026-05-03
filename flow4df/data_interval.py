@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 import datetime as dt
 from dataclasses import dataclass, asdict
 
