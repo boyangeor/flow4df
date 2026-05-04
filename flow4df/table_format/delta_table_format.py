@@ -555,10 +555,16 @@ class DeltaTableFormat(TableFormat):
         )
         file_row_count = F.get_json_object('stats', '$.numRecords')
         size_gib = F.sum('size') / F.lit(1_073_741_824)
+        size_mib = F.col('size') / F.lit(1_048_576)
         agg_cols = [
             F.count('*').alias('file_count'),
             F.sum(file_row_count.cast(LongType())).alias('row_count'),
             size_gib.alias('size_gib'),
+            F.min('file_added_ts').alias('min_file_ts'),
+            F.max('file_added_ts').alias('max_file_ts'),
+            F.min(size_mib).alias('min_file_size_mib'),
+            F.max(size_mib).alias('max_file_size_mib'),
+            F.avg(size_mib).alias('avg_file_size_mib')
         ]
         stats_df = raw_log_snapshot.select(agg_cols)
         stats_row = stats_df.collect()[0]
