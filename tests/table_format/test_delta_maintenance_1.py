@@ -71,7 +71,11 @@ def build_table(temp_dir: str) -> flow4df.Table:
         table_index=None,
         transformation=transformation,
         table_format=flow4df.DeltaTableFormat(
-            stateful_query_source=True, merge_schema=True,
+            stateful_query_source=True,
+            merge_schema=True,
+            table_properties={
+                'delta.checkpointPolicy': 'v2',
+            }
         ),
         storage=flow4df.LocalStorage(prefix='/tmp'),
         storage_stub=flow4df.LocalStorage(prefix='/tmp/stubs'),

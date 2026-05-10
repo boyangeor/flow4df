@@ -25,6 +25,7 @@ log = logging.getLogger()
 TABLE_FORMAT_NAME = 'delta'
 
 bool_literal = Literal['true', 'false']
+checkpoint_policy = Literal['classic', 'v2']
 # https://docs.delta.io/table-properties/
 DeltaTableProperties = TypedDict(
     'DeltaTableProperties',
@@ -40,7 +41,7 @@ DeltaTableProperties = TypedDict(
         'delta.minReaderVersion': int,
         'delta.minWriterVersion': int,
         'delta.setTransactionRetentionDuration': str,
-        'delta.checkpointPolicy': str,  # classic
+        'delta.checkpointPolicy': checkpoint_policy,  # classic
         'delta.enableRowTracking': bool_literal,  # disabled by default
     },
     total=False,
