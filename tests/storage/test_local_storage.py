@@ -67,19 +67,3 @@ def test_build_catalog_location() -> None:
     expected = '/tmp/mydir/catalogX'
     actual = storage.build_catalog_location(identifier)
     assert actual == expected
-
-
-def test_build_location_with_suffix() -> None:
-    storage = LocalStorage(prefix='/tmp')
-    identifier = TableIdentifier(
-        catalog='catalog1',
-        schema='bronze',
-        name='trf_raw_measurement',
-        version='1',
-    )
-    expected = '/tmp/catalog1/bronze/trf_raw_measurement_v1.delta'
-    actual = storage.build_location(
-        table_identifier=identifier,
-        table_suffix='delta',
-    )
-    assert actual == expected

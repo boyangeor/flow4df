@@ -31,6 +31,9 @@ dev = [
     "pytest>=9.0.2",
     "coverage>=7.13.0",
 ]
+duckdb = [
+    "duckdb"
+]
 doc = [
     "sphinx==8.2.3",
     "sphinx_rtd_theme==3.0.2",

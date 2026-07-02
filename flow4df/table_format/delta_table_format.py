@@ -339,6 +339,9 @@ class DeltaTableFormat(TableFormat):
             end_iso_timestamp=raw_data_interval['end']
         )
 
+    def build_duckdb_query(self, canonical_location: str) -> str:
+        return f"SELECT * FROM delta_scan('{canonical_location}');"
+
     @staticmethod
     def build_log_snapshot_df(spark: SparkSession, location: str) -> DataFrame:
         j_logs = [

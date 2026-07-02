@@ -95,7 +95,7 @@ def test_delta_maintenance(spark: SparkSession, temp_dir: str) -> None:
     )
     table.init_table(spark=spark)
     # Trigger it few times
-    for i in range(2):
+    for _ in range(2):
         handle = table.run(spark, trigger={'availableNow': True})
         assert handle is not None
         handle.awaitTermination()
@@ -121,4 +121,8 @@ def test_delta_maintenance(spark: SparkSession, temp_dir: str) -> None:
     # The file count should be smaller
     _m = 'Maintenance did not reduce the file count'
     assert stats_before.file_count > stats_after.file_count, _m
+
+    # Test as_duckdb_rel
+    rel = table.as_duckdb_rel()
+    rel.show(max_rows=5)
     return None

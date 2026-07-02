@@ -6,6 +6,11 @@ class Storage(Protocol):
     def build_location(self, table_identifier: TableIdentifier) -> str:
         ...
 
+    def build_canonical_location(
+        self, table_identifier: TableIdentifier
+    ) -> str:
+        ...
+
     def build_checkpoint_location(
         self, table_identifier: TableIdentifier, checkpoint_dir: str,
     ) -> str:

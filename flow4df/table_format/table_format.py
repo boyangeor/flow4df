@@ -116,6 +116,12 @@ class TableFormat(Protocol):
         """Read the DataInterval of the last batch run."""
         ...
 
+    def build_duckdb_query(self, canonical_location: str) -> str:
+        """Build `SELECT *` query that can be used to create
+        duckdb.DuckDBPyRelation.
+        """
+        ...
+
     def configure_session(
         self,
         spark: SparkSession,
@@ -127,3 +133,5 @@ class TableFormat(Protocol):
         TableFormat implementation.
         """
         ...
+
+

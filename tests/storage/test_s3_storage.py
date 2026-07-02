@@ -1,5 +1,5 @@
 import pytest
-from flow4df import TableIdentifier
+from flow4df import TableIdentifier, table_identifier
 from flow4df import S3Storage
 
 location_tests = [
@@ -45,3 +45,20 @@ def test_build_location(
     created_cp_location = storage.build_checkpoint_location(ti)
     assert created_location == expected_location
     assert created_cp_location == expected_cp_location
+
+
+def test_build_canonical_location() -> None:
+    identifier = TableIdentifier(
+        catalog='catalogX',
+        schema='schemaY',
+        name='dim_city',
+        version='2'
+    )
+    storage = S3Storage(
+        bucket_name='other_secret_bucket',
+        s3_client='s3a',
+        prefix='dwh2'
+    )
+    can_loc = storage.build_canonical_location(identifier)
+    expected = 's3://other_secret_bucket/dwh2/catalogX/schemaY/dim_city_v2'
+    assert can_loc == expected

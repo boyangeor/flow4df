@@ -8,27 +8,11 @@ from flow4df.storage.storage import Storage
 class LocalStorage(Storage):
     prefix: str
 
-    def _build_table_component(
-        self,
-        table_identifier: TableIdentifier,
-        table_suffix: str | None = None
-    ) -> str:
-        table_component = (
-            f'{table_identifier.name}_v{table_identifier.version}'
-        )
-        if table_suffix is not None:
-            table_component = f'{table_component}.{table_suffix}'
+    def _build_table_component(self, table_identifier: TableIdentifier) -> str:
+        return f'{table_identifier.name}_v{table_identifier.version}'
 
-        return table_component
-
-    def build_location(
-        self,
-        table_identifier: TableIdentifier,
-        table_suffix: str | None = None
-    ) -> str:
-        table_component = self._build_table_component(
-            table_identifier=table_identifier, table_suffix=table_suffix
-        )
+    def build_location(self, table_identifier: TableIdentifier) -> str:
+        table_component = self._build_table_component(table_identifier)
         path = Path(
             self.prefix,
             table_identifier.catalog,
@@ -37,15 +21,17 @@ class LocalStorage(Storage):
         )
         return path.as_posix()
 
+    def build_canonical_location(
+        self, table_identifier: TableIdentifier
+    ) -> str:
+        return self.build_location(table_identifier)
+
     def build_checkpoint_location(
         self,
         table_identifier: TableIdentifier,
         checkpoint_dir: str = '_checkpoint',
-        table_suffix: str | None = None
     ) -> str:
-        table_component = self._build_table_component(
-            table_identifier=table_identifier, table_suffix=table_suffix
-        )
+        table_component = self._build_table_component(table_identifier)
         path = Path(
             self.prefix,
             table_identifier.catalog,

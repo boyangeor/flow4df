@@ -9,6 +9,7 @@ from collections import Counter
 from abc import abstractmethod
 from types import ModuleType
 from typing import Any, Protocol, Callable, TypeVar, ParamSpec, NoReturn
+from typing import TYPE_CHECKING
 from dataclasses import dataclass, field, replace
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession, DataFrame
@@ -16,6 +17,9 @@ from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql import DataFrameWriter, DataFrameWriterV2
 from pyspark.sql.streaming.readwriter import DataStreamWriter
 from pyspark.sql.types import StructType, DataType
+
+if TYPE_CHECKING:
+    import duckdb  # type: ignore
 
 import flow4df
 from flow4df import type_annotations, enums
@@ -312,6 +316,12 @@ class Table:
         empty_df = spark.createDataFrame(data=[], schema=self.table_schema)
         empty_df.printSchema()
 
+    def as_duckdb_rel(self) -> duckdb.DuckDBPyRelation:
+        import duckdb
+        loc = self.storage.build_canonical_location(self.table_identifier)
+        query = self.table_format.build_duckdb_query(canonical_location=loc)
+        return duckdb.sql(query)
+
 
 class Transformation(Protocol):
 
@@ -438,3 +448,4 @@ class TableIndex:
             identifier=(catalog, schema, name, version),
             tables=all_tables
         )
+
