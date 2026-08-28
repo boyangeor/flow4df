@@ -2,6 +2,7 @@ from typing import Protocol, TypeAlias, Union, Any
 from pyspark.sql import types as T
 from pyspark.sql import SparkSession, DataFrame, DataFrameWriter
 from pyspark.sql.streaming.readwriter import DataStreamWriter
+from pyspark.sql.streaming.query import StreamingQuery
 
 from flow4df.table_identifier import TableIdentifier
 from flow4df.storage_backend import StorageBackend
@@ -29,6 +30,11 @@ class Storage(Protocol):
         Most likely sets (not an exhaustive list):
             - .format()
             - .option('path', '<location>')
+        """
+        ...
+
+    def run_streaming_writer(self, writer: DataStreamWriter) -> StreamingQuery:
+        """Run the streaming writer with .start() or .toTable()
         """
         ...
 
@@ -79,4 +85,8 @@ class Storage(Protocol):
 
     @property
     def location(self) -> str:
+        ...
+
+    @property
+    def canonical_name(self) -> str:
         ...

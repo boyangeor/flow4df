@@ -79,7 +79,7 @@ class StructuredStreamingTransformation(Transformation):
         )
         writer = this_storage.configure_writer(writer)
         assert isinstance(writer, DataStreamWriter)
-        return writer.start()
+        return this_storage.run_streaming_writer(writer)
 
     def test_transformation(
         self,

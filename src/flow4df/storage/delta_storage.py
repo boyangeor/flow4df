@@ -2,11 +2,12 @@ import re
 import logging
 import operator
 import functools
-import typing
+import textwrap
 from typing import TypeAlias, Union, Any
 from dataclasses import dataclass, field
 from pyspark.sql import SparkSession, DataFrame, Column, Window
 from pyspark.sql import DataFrameReader, DataFrameWriter
+from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql.streaming.readwriter import DataStreamReader, DataStreamWriter
 from pyspark.sql import functions as F, types as T
 from delta.tables import DeltaTable
@@ -37,9 +38,14 @@ class DeltaStorage(Storage):
     stateful_query_source: bool
     merge_schema: bool = True
     constraints: list[Constraint] = field(default_factory=list)
+    use_catalog: bool = False
+    catalog_name: str | None = None
 
     def __post_init__(self) -> None:
         self._assert_compatibility()
+        if self.use_catalog:
+            _m = '`catalog_name` must be specified!'
+            assert self.catalog_name is not None, _m
 
     def build_batch_df(
         self, spark: SparkSession, options: dict[str, Any] | None = None
@@ -52,7 +58,11 @@ class DeltaStorage(Storage):
         return self._build_df(reader=spark.readStream, options=options)
 
     def build_delta_table(self, spark: SparkSession) -> DeltaTable:
-        return DeltaTable.forPath(sparkSession=spark, path=self.location)
+        if self.use_catalog:
+            dt = DeltaTable.forName(spark, tableOrViewName=self.canonical_name)
+        else:
+            dt = DeltaTable.forPath(spark, path=self.location)
+        return dt
 
     def configure_writer(
         self, writer: Writer, data_interval: DataInterval | None = None
@@ -70,9 +80,11 @@ class DeltaStorage(Storage):
         writer = (
             writer
             .format(TABLE_FORMAT)
-            .option('path', self.location)
             .option('mergeSchema', self.merge_schema)
         )
+        if not self.use_catalog:
+            writer = writer.option('path', self.location)
+
         table_id = self.table_identifier.table_id
         if data_interval is not None:
             writer = (
@@ -82,6 +94,12 @@ class DeltaStorage(Storage):
             )
 
         return writer
+
+    def run_streaming_writer(self, writer: DataStreamWriter) -> StreamingQuery:
+        if not self.use_catalog:
+            return writer.start()
+        else:
+            return writer.toTable(self.canonical_name)
 
     def build_checkpoint_location(self, checkpoint_dir: str) -> str:
         cp_location = self.storage_backend.build_checkpoint_location(
@@ -94,7 +112,7 @@ class DeltaStorage(Storage):
     def run_storage_maintenance(
         self, spark: SparkSession, column_types: dict[str, T.DataType]
     ) -> None:
-        dt = self._build_delta_table(spark=spark)
+        dt = self.build_delta_table(spark=spark)
         if not self.stateful_query_source:
             dt.optimize().executeCompaction()
             return None
@@ -120,24 +138,45 @@ class DeltaStorage(Storage):
         self, spark: SparkSession, schema: T.StructType
     ) -> None:
         """TODO: Debug, test with different backends."""
-        # Issue when setting file:///tmp/blah as location
-        # `CREATE TABLE contains two different locations:`
-        # `file:///... vs file:/...`
-        # To investigate further, mb a bug? For now just remove it
-        location = re.sub('^file://', '', self.location)
-        builder = (
-            DeltaTable
-            .createIfNotExists(sparkSession=spark)
-            .location(location)
-            .addColumns(schema)
-            .partitionedBy(*self.partitioning.columns)
-        )
-        for c in self.constraints:
-            builder = builder.property(
-                key=f'delta.constraints.{c.name}', value=c.expression
+        if not self.use_catalog:
+            # Issue when setting file:///tmp/blah as location
+            # `CREATE TABLE contains two different locations:`
+            # `file:///... vs file:/...`
+            # To investigate further, mb a bug? For now just remove it
+            builder = (
+                DeltaTable
+                .createIfNotExists(sparkSession=spark)
+                .addColumns(schema)
+                .partitionedBy(*self.partitioning.columns)
             )
+            location = re.sub('^file://', '', self.location)
+            builder = builder.location(location)
+            for c in self.constraints:
+                builder = builder.property(
+                    key=f'delta.constraints.{c.name}', value=c.expression
+                )
 
-        builder.execute()
+            builder.execute()
+
+        elif self.use_catalog:
+            constraint_props = [
+                f"'delta.constraints.{c.name}' = '{c.expression}'"
+                for c in self.constraints
+            ]
+            props = [
+                "'delta.logRetentionDuration' = 'INTERVAL 30 DAYS'"
+            ]
+            tbl_props = ', '.join(props + constraint_props)
+            create_table_q = textwrap.dedent(f"""
+            CREATE TABLE IF NOT EXISTS {self.canonical_name} (
+              {schema.toDDL()}
+            )
+            USING DELTA
+            PARTITIONED BY ({', '.join(self.partitioning.columns)})
+            TBLPROPERTIES ({tbl_props})
+            """)
+            spark.sql(create_table_q)
+
         return None
 
     def build_storage_stats(self, spark: SparkSession) -> DataFrame:
@@ -162,12 +201,19 @@ class DeltaStorage(Storage):
             table_suffix=TABLE_FORMAT,
         )
 
+    @property
+    def canonical_name(self) -> str:
+        return f'{self.catalog_name}.{self.table_identifier.table_id}'
+
     # End of Storage protocol
     def build_log_snapshot_df(self, spark: SparkSession) -> DataFrame:
-        raw_log_snapshot_df = self._build_log_snapshot_df(
-            spark=spark, location=self.location
-        )
-        return raw_log_snapshot_df
+        if self.use_catalog:
+            return self._build_metadata_log_snapshot_df(
+                node_data_frame=self.build_batch_df(spark),
+                partitioning=self.partitioning
+            )
+
+        return self._build_log_snapshot_df(spark=spark, location=self.location)
 
     def find_partition_to_compact(
         self, spark: SparkSession, column_types: dict[str, T.DataType]
@@ -202,26 +248,31 @@ class DeltaStorage(Storage):
             part_df.write
             .format(TABLE_FORMAT)
             .mode('overwrite')
-            .option('path', self.location)
+            # .option('path', self.location)
             .option('dataChange', False)
             .option('replaceWhere', partition_predicate)
         )
-        writer.save()
+        if self.use_catalog:
+            writer.saveAsTable(name=self.canonical_name)
+        else:
+            writer.save(path=self.location)
         return None
 
     def _build_df(
         self, reader: Reader, options: dict[str, Any] | None = None
     ) -> DataFrame:
+        configured_reader = reader.format(TABLE_FORMAT)
+        if options is not None:
+            configured_reader = configured_reader.options(**options)
+
+        if self.use_catalog:
+            return configured_reader.table(self.canonical_name)
+
         location = self.storage_backend.build_location(
             table_identifier=self.table_identifier,
             table_suffix=TABLE_FORMAT
         )
-        configured_reader = (
-            reader.format(TABLE_FORMAT).option('path', location)
-        )
-        if options is not None:
-            configured_reader = configured_reader.options(**options)
-        return configured_reader.load()
+        return configured_reader.load(path=location)
 
     def _assert_compatibility(self) -> None:
         """TODO:"""
@@ -229,9 +280,6 @@ class DeltaStorage(Storage):
             _m = 'Partitioning must have time_monotonic_increasing columns'
             _tmi = self.partitioning.time_monotonic_increasing
             assert len(_tmi) > 0, _m
-
-    def _build_delta_table(self, spark: SparkSession) -> DeltaTable:
-        return DeltaTable.forPath(sparkSession=spark, path=self.location)
 
     def _inspect_log_df(
         self, spark: SparkSession, column_types: dict[str, T.DataType]
@@ -284,6 +332,47 @@ class DeltaStorage(Storage):
         )
         log_snapshot_df = DataFrame(jvm_table_files, spark)
         return log_snapshot_df
+
+    @staticmethod
+    def _build_metadata_log_snapshot_df(
+        node_data_frame: DataFrame,
+        partitioning: Partitioning,
+    ) -> DataFrame:
+
+        def n_add_partition_values(
+            snapshot_df: DataFrame, partitioning_columns: list[str]
+        ) -> DataFrame:
+            fp = F.col('file_path')
+            parsed = F.str_to_map(
+                fp, pairDelim=F.lit('/'), keyValueDelim=F.lit('=')
+            )
+            part_values = F.map_filter(
+                parsed, lambda k, _: k.isin(*partitioning_columns)
+            )
+            return snapshot_df.withColumn('partitionValues', part_values)
+
+        def n_add_modtime_millis(snapshot_df: DataFrame) -> DataFrame:
+            mod_time_millis = F.unix_millis('file_modification_time')
+            return snapshot_df.withColumn('modificationTime', mod_time_millis)
+
+        md = F.col('_metadata')
+        mod_time = md.getField('file_modification_time')
+        cols = [
+            mod_time.alias('file_modification_time'),
+            md.getField('file_path').alias('file_path'),
+            md.getField('file_name').alias('file_name')
+        ]
+        return (
+            node_data_frame
+            .select(cols)
+            .groupBy('file_modification_time', 'file_path', 'file_name')
+            .agg(F.count('*').alias('row_count'))
+            .transform(
+                n_add_partition_values,
+                partitioning_columns=partitioning.columns
+            )
+            .transform(n_add_modtime_millis)
+        )
 
     @staticmethod
     def add_partitioning_info(
