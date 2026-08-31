@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from flow4df.table_identifier import TableIdentifier
 from flow4df.storage_backend import StorageBackend
 
+
 class S3Client(Enum):
     s3 = 's3'
     s3a = 's3a'
