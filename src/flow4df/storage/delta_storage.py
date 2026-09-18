@@ -167,12 +167,17 @@ class DeltaStorage(Storage):
                 "'delta.logRetentionDuration' = 'INTERVAL 30 DAYS'"
             ]
             tbl_props = ', '.join(props + constraint_props)
+            partby_clause = ''  # `PARTITIONED BY ()` is invalid
+            if len(self.partitioning.columns) > 0:
+                cols = self.partitioning.columns
+                partby_clause = f"PARTITIONED BY ({', '.join(cols)})"
+
             create_table_q = textwrap.dedent(f"""
             CREATE TABLE IF NOT EXISTS {self.canonical_name} (
               {schema.toDDL()}
             )
             USING DELTA
-            PARTITIONED BY ({', '.join(self.partitioning.columns)})
+            {partby_clause}
             TBLPROPERTIES ({tbl_props})
             """)
             spark.sql(create_table_q)

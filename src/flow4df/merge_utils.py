@@ -7,22 +7,32 @@ from delta.tables import DeltaTable
 
 def merge_nested_scd_2(
     spark: SparkSession,
-    location: str,
     source_df: DataFrame,
     key_columns: list[str],
-    value_columns: list[str]
+    value_columns: list[str],
+    location: str | None = None,
+    canonical_name: str | None = None,
 ) -> None:
     """`key_columns` must be primary key for `source_df`!"""
 
+    _m = 'Either `location` or `canonical_name` must be passed!'
+    assert (location is None) ^ (canonical_name is None), _m
+
     _m = '`source_df` must have `valid_from` timestamp column.'
     assert 'valid_from' in source_df.columns, _m
+
+    if location is not None:
+        target_dt = DeltaTable.forPath(sparkSession=spark, path=location)
+    elif canonical_name is not None:
+        target_dt = DeltaTable.forName(
+            sparkSession=spark, tableOrViewName=canonical_name
+        )
 
     change_struct = F.struct(*value_columns, 'valid_from')
     source_df = source_df.withColumns({
         'changes': F.array(change_struct),
         'n_changes': F.lit(1),
     })
-    target_dt = DeltaTable.forPath(sparkSession=spark, path=location)
 
     conditions = [f'target.{c} = source.{c}' for c in key_columns]
     merge_condition = ' AND '.join(conditions)
