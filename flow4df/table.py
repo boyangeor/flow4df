@@ -449,3 +449,33 @@ class TableIndex:
             tables=all_tables
         )
 
+    def summarize_tables(
+        self,
+        spark: SparkSession,
+        catalog: str | None = None,
+        schema: str | None = None,
+    ) -> DataFrame:
+
+        def is_required(table: flow4df.Table) -> bool:
+            c1 = catalog is None or catalog == table.table_identifier.catalog
+            c2 = schema is None or schema == table.table_identifier.schema
+            return c1 and c2
+
+        def build_stats_row(table: flow4df.Table) -> dict:
+            row = table.table_identifier.as_dict()
+            try:
+                stats = table.calculate_table_stats(spark).as_dict()
+                row.update(stats)
+            except Exception:
+                fn = table.table_identifier.full_name
+                log.warning(f'Failed to `calculate_table_stats` for {fn}')
+
+            return row
+
+        rows = [
+            build_stats_row(t)
+            for t in self.all_tables if is_required(t)
+        ]
+        _m = 'No tables found. Make sure `catalog/schema` are correct.'
+        assert len(rows) > 0, _m
+        return spark.createDataFrame(rows)

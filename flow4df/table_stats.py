@@ -1,5 +1,5 @@
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -12,3 +12,6 @@ class TableStats:
     min_file_size_mib: float
     max_file_size_mib: float
     avg_file_size_mib: float
+
+    def as_dict(self) -> dict[str, int | float | dt.datetime]:
+        return asdict(self)
